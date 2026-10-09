@@ -1,0 +1,32 @@
+{
+  "name": "@fiscal/api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Serviço fiscal central multi-empresa: NFC-e e NFS-e por HTTP",
+  "type": "module",
+  "scripts": {
+    "build": "tsup",
+    "start": "node dist/principal.js",
+    "dev": "tsx watch src/principal.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "^0.5.8",
+    "@fiscal/armazenamento": "workspace:^",
+    "@fiscal/certificado": "workspace:^",
+    "@fiscal/core": "workspace:^",
+    "@fiscal/documentos": "workspace:^",
+    "@fiscal/nfce": "workspace:^",
+    "@fiscal/nfse-nacional": "workspace:^",
+    "@fiscal/numeracao": "workspace:^",
+    "@fiscal/transporte": "workspace:^",
+    "@fiscal/xml": "workspace:^",
+    "@hono/node-server": "^2.1.4",
+    "hono": "^4.13.13"
+  },
+  "devDependencies": {
+    "fflate": "^0.8.3",
+    "tsx": "^4.23.15"
+  }
+}
