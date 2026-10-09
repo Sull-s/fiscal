@@ -1,0 +1,64 @@
+{
+  "emitente": {
+    "cnpj": "11222333000181",
+    "ie": "1234567890",
+    "razao": "Padaria Teste Ltda",
+    "crt": 1,
+    "versao_app": "Caixa 2.3",
+    "endereco": {
+      "xLgr": "Rua A",
+      "nro": "",
+      "xCpl": "Sala 2",
+      "xBairro": "Centro",
+      "cMun": "4314902",
+      "xMun": "Porto Alegre",
+      "uf": "RS",
+      "cep": "90010000"
+    }
+  },
+  "nota": {
+    "ambiente": 2,
+    "serie": 3,
+    "numero": 42
+  },
+  "venda": {
+    "itens": [
+      {
+        "codigo": "789",
+        "descricao": "Água mineral 500ml",
+        "ncm": "22011000",
+        "cest": "0300300",
+        "cfop": "5405",
+        "csosn": "500",
+        "pis_cofins_cst": "04",
+        "quantidade": 3,
+        "valor_unitario": 3.5
+      },
+      {
+        "codigo": "PAO",
+        "descricao": "Pão francês",
+        "ncm": "19059090",
+        "cfop": "5102",
+        "csosn": "102",
+        "pis_cofins_cst": "99",
+        "unidade": "KG",
+        "quantidade": 0.355,
+        "valor_unitario": 16.9
+      }
+    ],
+    "pagamentos": [
+      {
+        "forma": "dinheiro",
+        "valor": 20
+      }
+    ]
+  },
+  "quando": "2026-10-09T17:41:40.250Z",
+  "cNF": "84214616",
+  "resultado": {
+    "chave": "43261011222333000181650030000000421842146166",
+    "vNF": 16.5,
+    "troco": 3.5,
+    "qrCode": "https://www.sefaz.rs.gov.br/NFCE/NFCE-COM.aspx?p=43261011222333000181650030000000421842146166|3|2"
+  }
+}

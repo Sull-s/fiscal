@@ -1,0 +1,36 @@
+{
+  "name": "@fiscal/certificado",
+  "version": "0.1.0",
+  "description": "Certificado digital A1 (.pfx): leitura, cadeia, validade e opções de mTLS",
+  "license": "UNLICENSED",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    }
+  },
+  "files": ["dist"],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@fiscal/core": "workspace:^",
+    "node-forge": "^1.4.0"
+  },
+  "devDependencies": {
+    "@types/node-forge": "^1.3.14"
+  }
+}

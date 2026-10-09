@@ -1,0 +1,28 @@
+{
+  "name": "fiscal",
+  "private": true,
+  "description": "Módulos fiscais reutilizáveis: NF-e, NFC-e, NFS-e e tudo que é comum entre elas",
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "test": "turbo run test --concurrency=2",
+    "typecheck": "turbo run typecheck",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "verificar": "pnpm lint && pnpm typecheck && pnpm test",
+    "changeset": "changeset",
+    "versionar": "changeset version"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "1.9.4",
+    "@changesets/cli": "^2.27.10",
+    "@types/node": "^22.10.0",
+    "tsup": "^8.3.5",
+    "turbo": "^2.3.3",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.8"
+  }
+}

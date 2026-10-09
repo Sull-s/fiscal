@@ -1,0 +1,39 @@
+{
+  "name": "@fiscal/core",
+  "version": "0.1.0",
+  "description": "Regras fiscais puras (sem rede): validadores, chave de acesso, UFs, data/hora SEFAZ",
+  "license": "UNLICENSED",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./municipios": {
+      "import": {
+        "types": "./dist/municipios.d.ts",
+        "default": "./dist/municipios.js"
+      },
+      "require": {
+        "types": "./dist/municipios.d.cts",
+        "default": "./dist/municipios.cjs"
+      }
+    }
+  },
+  "files": ["dist"],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  }
+}

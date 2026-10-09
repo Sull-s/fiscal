@@ -1,0 +1,77 @@
+{
+  "emitente": {
+    "cnpj": "11222333000181",
+    "ie": "1234567890",
+    "razao": "Padaria Teste Ltda",
+    "crt": 1,
+    "versao_app": "Caixa 2.3",
+    "endereco": {
+      "xLgr": "Rua A",
+      "nro": "",
+      "xCpl": "Sala 2",
+      "xBairro": "Centro",
+      "cMun": "4314902",
+      "xMun": "Porto Alegre",
+      "uf": "RS",
+      "cep": "90010000"
+    }
+  },
+  "nota": {
+    "ambiente": 1,
+    "serie": 1,
+    "numero": 999999
+  },
+  "venda": {
+    "itens": [
+      {
+        "codigo": "X",
+        "descricao": "Bolo “de cenoura” – fatia",
+        "ncm": "19059090",
+        "cfop": "5102",
+        "csosn": "102",
+        "quantidade": 2,
+        "valor_unitario": 9.99
+      },
+      {
+        "codigo": "Y",
+        "descricao": "Café",
+        "ncm": "21011110",
+        "cfop": "5102",
+        "csosn": "103",
+        "origem": 0,
+        "quantidade": 1,
+        "valor_unitario": 5.5
+      }
+    ],
+    "desconto": 1.13,
+    "cpf": "529.982.247-25",
+    "pagamentos": [
+      {
+        "forma": "pix",
+        "valor": 10,
+        "autorizacao": "E123456789",
+        "integrado": true,
+        "cnpj_credenciadora": "18236120000158"
+      },
+      {
+        "forma": "debito",
+        "valor": 8,
+        "integrado": false
+      },
+      {
+        "forma": "outros",
+        "valor": 6.35,
+        "descricao": "Vale refeição empresa"
+      }
+    ],
+    "informacoes": "Obrigado pela preferência!"
+  },
+  "quando": "2026-10-09T17:41:40.250Z",
+  "cNF": "56330662",
+  "resultado": {
+    "chave": "43261011222333000181650010009999991563306628",
+    "vNF": 24.35,
+    "troco": 0,
+    "qrCode": "https://www.sefaz.rs.gov.br/NFCE/NFCE-COM.aspx?p=43261011222333000181650010009999991563306628|3|1"
+  }
+}

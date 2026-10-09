@@ -1,0 +1,17 @@
+node_modules/
+dist/
+coverage/
+.turbo/
+*.log
+.env
+.env.*
+!.env.exemplo
+
+# Certificados e chaves nunca entram no repositório
+*.pfx
+*.p12
+*.pem
+*.key
+
+# Exceção: certificados de TESTE (autoassinados, sem valor fiscal) usados nas fixtures
+!packages/*/testes/fixtures/*.pfx

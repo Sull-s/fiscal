@@ -1,0 +1,102 @@
+{
+  "emitente": {
+    "cnpj": "48618635000183",
+    "ie": "0960000000",
+    "razao": "Rosemeri Teresinha Muller Correa",
+    "fantasia": "Comida Caseira da Rose",
+    "crt": 4,
+    "versao_app": "RestoFlow 1.0",
+    "endereco": {
+      "xLgr": "Av. Mãe Apolinária Matias Batista",
+      "nro": "39",
+      "xBairro": "Morro Santana",
+      "cMun": "4314902",
+      "xMun": "Porto Alegre",
+      "uf": "RS",
+      "cep": "91450-510",
+      "fone": "(51) 99112-6719"
+    },
+    "respTec": {
+      "cnpj": "10440532000101",
+      "contato": "Responsavel Tecnico",
+      "email": "contato@exemplo.com.br",
+      "fone": "51999999999"
+    }
+  },
+  "nota": {
+    "ambiente": 2,
+    "serie": 1,
+    "numero": 158
+  },
+  "venda": {
+    "itens": [
+      {
+        "codigo": "P1",
+        "descricao": "Prato feito com entrega",
+        "ncm": "21069090",
+        "cfop": "5102",
+        "csosn": "102",
+        "pis_cofins_cst": "49",
+        "unidade": "UN",
+        "quantidade": 1,
+        "valor_unitario": 28
+      },
+      {
+        "codigo": "B1",
+        "descricao": "Refrigerante lata 350 ml",
+        "ncm": "22021000",
+        "cest": "0300700",
+        "cfop": "5405",
+        "csosn": "500",
+        "pis_cofins_cst": "04",
+        "unidade": "UN",
+        "quantidade": 2,
+        "valor_unitario": 6
+      },
+      {
+        "codigo": "S1",
+        "descricao": "Pudim de leite & calda",
+        "ncm": "19019020",
+        "cfop": "5102",
+        "csosn": "102",
+        "quantidade": 1,
+        "valor_unitario": 8,
+        "observacao": "sem calda extra"
+      }
+    ],
+    "desconto": 4.8,
+    "outras": 5,
+    "entrega": true,
+    "destinatario": {
+      "cpf": "12345678909",
+      "nome": "Mônica Souza",
+      "endereco": {
+        "xLgr": "Rua das Flores",
+        "nro": "120",
+        "xCpl": "ap 302",
+        "xBairro": "Morro Santana",
+        "cep": "91450-510",
+        "fone": "51999998888"
+      }
+    },
+    "pagamentos": [
+      {
+        "forma": "credito",
+        "valor": 48.2,
+        "bandeira": "Mastercard",
+        "autorizacao": "A1B2C3",
+        "integrado": true,
+        "cnpj_credenciadora": "10573521000191"
+      }
+    ],
+    "informacoes": "Pedido #158 - Comida Caseira da Rose"
+  },
+  "quando": "2026-10-09T17:41:40.250Z",
+  "cNF": "47465253",
+  "resultado": {
+    "chave": "43261048618635000183650010000001581474652530",
+    "vNF": 48.2,
+    "troco": 0,
+    "qrCode": "https://www.sefaz.rs.gov.br/NFCE/NFCE-COM.aspx?p=43261048618635000183650010000001581474652530|3|2"
+  }
+}

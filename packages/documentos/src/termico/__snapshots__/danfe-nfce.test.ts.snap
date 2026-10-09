@@ -1,0 +1,100 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`DANFE NFC-e em texto (80 mm) > nota autorizada de entrega 1`] = `
+"        Rosemeri Teresinha Muller Correa
+             Comida Caseira da Rose
+     CNPJ 48.618.635/0001-83 IE 0960000000
+  Av. Mãe Apolinária Matias Batista, 39, Morro
+            Santana, Porto Alegre/RS
+------------------------------------------------
+DANFE NFC-e - Documento Auxiliar da Nota Fiscal
+            de Consumidor Eletrônica
+------------------------------------------------
+# CÓD DESCRIÇÃO                         VL TOTAL
+001 P1 Prato feito com entrega
+1 UN x 28,00                               28,00
+002 B1 Refrigerante lata 350 ml
+2 UN x 6,00                                12,00
+003 S1 Pudim de leite & calda
+1 UN x 8,00                                 8,00
+------------------------------------------------
+Qtd. total de itens                            3
+Valor total R$                             48,00
+Desconto R$                                 4,80
+Acréscimos R$                               5,00
+Valor a pagar R$                           48,20
+
+FORMA DE PAGAMENTO                 VALOR PAGO R$
+Cartão de Crédito                          48,20
+------------------------------------------------
+        Consulte pela Chave de Acesso em
+       www.sefaz.rs.gov.br/nfce/consulta
+  4326 1048 6186 3500 0183 6500 1000 0001 5812
+                   7122 6994
+------------------------------------------------
+        CONSUMIDOR - CPF 123.456.789-09
+                  Mônica Souza
+  Rua das Flores, 120, ap 302, Morro Santana,
+                  Porto Alegre
+------------------------------------------------
+NFC-e nº 000000158 Série 001 09/10/2026 14:41:40
+   Protocolo de autorização: 143260000123456
+    Data de autorização: 09/10/2026 14:41:42
+
+                   [QR CODE]
+
+      Pedido #158 - Comida Caseira da Rose
+"
+`;
+
+exports[`DANFE NFC-e em texto (80 mm) > nota de homologação sem protocolo, com troco, cancelada, em 58 mm 1`] = `
+"       Padaria Teste Ltda
+   CNPJ 11.222.333/0001-81 IE
+           1234567890
+  Rua A, S/N, Sala 2, Centro,
+        Porto Alegre/RS
+--------------------------------
+DANFE NFC-e - Documento Auxiliar
+  da Nota Fiscal de Consumidor
+           Eletrônica
+     EMITIDA EM AMBIENTE DE
+ HOMOLOGAÇÃO - SEM VALOR FISCAL
+--------------------------------
+# CÓD DESCRIÇÃO         VL TOTAL
+001 789 NOTA FISCAL EMITIDA EM
+AMBIENTE DE HOMOLOGACAO - SEM
+VALOR FISCAL
+3 UN x 3,50                10,50
+002 PAO Pão francês
+0,355 KG x 16,90            6,00
+--------------------------------
+Qtd. total de itens            2
+Valor total R$             16,50
+Valor a pagar R$           16,50
+
+FORMA DE PAGAMENTO VALOR PAGO R$
+Dinheiro                   20,00
+Troco R$                    3,50
+--------------------------------
+Consulte pela Chave de Acesso em
+www.sefaz.rs.gov.br/nfce/consult
+               a
+ 4326 1011 2223 3300 0181 6500
+    3000 0000 4218 4214 6166
+--------------------------------
+  CONSUMIDOR NÃO IDENTIFICADO
+--------------------------------
+  NFC-e nº 000000042 Série 003
+      09/10/2026 14:41:40
+   EMITIDA EM CONTINGÊNCIA /
+     AGUARDANDO AUTORIZAÇÃO
+
+     *** NOTA CANCELADA ***
+
+     EMITIDA EM AMBIENTE DE
+ HOMOLOGAÇÃO - SEM VALOR FISCAL
+
+           [QR CODE]
+
+"
+`;
