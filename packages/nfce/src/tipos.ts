@@ -117,6 +117,19 @@ export interface DadosNota {
   codigoNumerico?: string;
   /** Nome e versão do sistema emissor (verProc) */
   versaoAplicativo?: string;
+  /**
+   * Emissão em contingência offline (tpEmis 9): a nota vale para o consumidor na hora e é
+   * transmitida depois, assim que a SEFAZ voltar (`transmitirNfceOffline`; o prazo legal é curto). Exige o certificado na montagem,
+   * porque o QR Code offline leva uma assinatura.
+   */
+  contingencia?: Contingencia;
+}
+
+export interface Contingencia {
+  /** Quando o sistema entrou em contingência (dhCont); não pode ser depois da emissão */
+  inicio: Date;
+  /** Motivo, 15 a 256 caracteres (xJust). Ex.: "SEFAZ sem resposta / internet indisponivel" */
+  justificativa: string;
 }
 
 export interface NfceMontada {
@@ -131,4 +144,6 @@ export interface NfceMontada {
   troco: number;
   qrCode: string;
   urlConsulta: string;
+  /** true quando montada em contingência offline (tpEmis 9) */
+  offline: boolean;
 }

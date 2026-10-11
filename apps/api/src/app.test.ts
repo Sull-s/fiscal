@@ -20,8 +20,9 @@ const ADMIN = "token-admin-de-teste-bem-comprido";
 const NS = 'xmlns="http://www.portalfiscal.inf.br/nfe"';
 
 /** SEFAZ simulada: o comportamento da próxima autorização é escolhido pelo teste. */
-let proximaAutorizacao: "100" | "778" | "sem-resposta" = "100";
+let proximaAutorizacao: "100" | "778" | "sem-resposta" | "sem-conexao" = "100";
 const chamadasSefaz: string[] = [];
+const eventosEnviados: string[] = [];
 const chaveDe = (xml: string) =>
   /Id="NFe(\d{44})"|<chNFe>(\d{44})<\/chNFe>/.exec(xml)?.slice(1).find(Boolean) ?? "";
 const prot = (chave: string, cStat: string, xMotivo: string, nProt = "143260000000001") =>
@@ -33,6 +34,11 @@ const sefazFalsa: ClienteSefaz = {
     const chave = chaveDe(mensagem);
     let xml = "";
     if (servico === "autorizacao") {
+      if (proximaAutorizacao === "sem-conexao") {
+        throw new ErroFiscal("SEFAZ_SEM_CONEXAO", "Não consegui conectar na SEFAZ.", {
+          podeTerSidoProcessado: false,
+        });
+      }
       if (proximaAutorizacao === "sem-resposta") {
         throw new ErroFiscal("SEFAZ_SEM_RESPOSTA", "A SEFAZ não respondeu.", {
           podeTerSidoProcessado: true,
@@ -45,6 +51,7 @@ const sefazFalsa: ClienteSefaz = {
     } else if (servico === "consulta") {
       xml = `<retConsSitNFe ${NS} versao="4.00"><cStat>100</cStat><xMotivo>Autorizado o uso da NF-e</xMotivo>${prot(chave, "100", "Autorizado o uso da NF-e", "143260000000099")}</retConsSitNFe>`;
     } else if (servico === "evento") {
+      eventosEnviados.push(mensagem);
       xml = `<retEnvEvento ${NS} versao="1.00"><cStat>128</cStat><xMotivo>Lote de Evento Processado</xMotivo><retEvento versao="1.00"><infEvento><tpAmb>2</tpAmb><verAplic>RS</verAplic><cOrgao>43</cOrgao><cStat>135</cStat><xMotivo>Evento registrado</xMotivo><chNFe>${chave}</chNFe><tpEvento>110111</tpEvento><nSeqEvento>1</nSeqEvento><dhRegEvento>2026-10-09T14:10:00-03:00</dhRegEvento><nProt>143260000000002</nProt></infEvento></retEvento></retEnvEvento>`;
     } else if (servico === "status") {
       xml = `<retConsStatServ ${NS} versao="4.00"><cStat>107</cStat><xMotivo>Servico em Operacao</xMotivo><dhRecbto>${new Date().toISOString().replace(/\.\d+Z$/, "+00:00")}</dhRecbto><tMed>1</tMed></retConsStatServ>`;
@@ -331,6 +338,80 @@ describe("NFC-e pela API", () => {
   });
 });
 
+describe("NFC-e em contingência offline pela API", () => {
+  type Resposta = { chave: string; numero: number; situacao: string; substitui?: string };
+  const emitir = async () => {
+    const r = await req("POST", "/v1/nfce", chaveApi, { venda });
+    return { status: r.status, corpo: (await r.json()) as Resposta };
+  };
+
+  it("sem a opção no cadastro, SEFAZ fora do ar continua dando 503", async () => {
+    proximaAutorizacao = "sem-conexao";
+    const r = await req("POST", "/v1/nfce", chaveApi, { venda });
+    expect(r.status).toBe(503);
+  });
+
+  it("com a opção: sai offline (202), DANFE de contingência e transmissão depois", async () => {
+    await req("PUT", "/v1/admin/empresas/rose", ADMIN, {
+      nfce: { emitente, serie: "1", versaoAplicativo: "Teste API", contingenciaOffline: true },
+    });
+    proximaAutorizacao = "sem-conexao";
+    const { status, corpo } = await emitir();
+    expect(status).toBe(202);
+    expect(corpo.situacao).toBe("offline");
+    expect(corpo.chave.slice(34, 35)).toBe("9");
+
+    const danfe = await (
+      await req("GET", `/v1/nfce/${corpo.chave}/danfe?formato=texto&via=estabelecimento`, chaveApi)
+    ).text();
+    expect(danfe).toContain("EMITIDA EM CONTINGÊNCIA");
+    expect(danfe).toContain("VIA DO ESTABELECIMENTO");
+    expect(await (await req("GET", "/v1/nfce/offline", chaveApi)).json()).toEqual({
+      chaves: [corpo.chave],
+    });
+
+    // SEFAZ ainda fora: nada muda
+    const ainda = await (await req("POST", "/v1/nfce/offline/transmitir", chaveApi)).json();
+    expect(ainda).toMatchObject({ restantes: 1, transmitidas: [{ situacao: "offline" }] });
+
+    proximaAutorizacao = "100";
+    const t = await (await req("POST", "/v1/nfce/offline/transmitir", chaveApi)).json();
+    expect(t).toEqual({
+      transmitidas: [
+        { chave: corpo.chave, situacao: "autorizada", motivo: "Autorizado o uso da NF-e" },
+      ],
+      restantes: 0,
+    });
+    expect(await (await req("GET", `/v1/nfce/${corpo.chave}/xml`, chaveApi)).text()).toMatch(
+      /^<nfeProc /,
+    );
+  });
+
+  it("sem resposta: offline com outro número e a tentativa online é cancelada por substituição", async () => {
+    proximaAutorizacao = "sem-resposta";
+    const { status, corpo } = await emitir();
+    expect(status).toBe(202);
+    expect(corpo.situacao).toBe("offline");
+    const original = corpo.substitui!;
+    expect(original).toMatch(/^\d{44}$/);
+    expect(await (await req("GET", `/v1/nfce/${original}`, chaveApi)).json()).toMatchObject({
+      situacao: "autorizada", // a SEFAZ falsa diz que a online foi autorizada
+      substituidaPor: corpo.chave,
+    });
+
+    proximaAutorizacao = "100";
+    await req("POST", "/v1/nfce/offline/transmitir", chaveApi);
+    expect(eventosEnviados.at(-1)).toContain("<tpEvento>110112</tpEvento>");
+    expect(eventosEnviados.at(-1)).toContain(`<chNFeRef>${corpo.chave}</chNFeRef>`);
+    expect(await (await req("GET", `/v1/nfce/${original}`, chaveApi)).json()).toMatchObject({
+      situacao: "cancelada",
+    });
+    await req("PUT", "/v1/admin/empresas/rose", ADMIN, {
+      nfce: { emitente, serie: "1", versaoAplicativo: "Teste API" },
+    });
+  });
+});
+
 describe("NFS-e pela API", () => {
   it("emite, consulta pela chave, gera o DANFSE e cancela", async () => {
     const r = await req("POST", "/v1/nfse", chaveApi, {
@@ -380,7 +461,8 @@ describe("arquivos para o contador", () => {
     expect(r.headers.get("Content-Type")).toBe("application/zip");
     const nomes = Object.keys(unzipSync(new Uint8Array(await r.arrayBuffer())));
     expect(nomes).toContain("manifesto.json");
-    expect(nomes.filter((n) => n.startsWith("65/") && !n.includes("evento"))).toHaveLength(3);
+    // 3 notas online + 2 offline + a tentativa online que foi substituída
+    expect(nomes.filter((n) => n.startsWith("65/") && !n.includes("evento"))).toHaveLength(6);
     expect(nomes.some((n) => n.includes("evento-cancelamento"))).toBe(true);
     expect(nomes).toContain(`nfse/${CHAVE_NFSE}.xml`);
   });

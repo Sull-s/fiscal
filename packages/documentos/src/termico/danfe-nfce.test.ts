@@ -56,6 +56,16 @@ describe("DANFE NFC-e em texto (80 mm)", () => {
     // Nenhuma linha passa das 32 colunas do papel de 58 mm
     expect(texto.split("\n").every((l) => l.length <= 32)).toBe(true);
   });
+
+  it("contingência offline (tpEmis 9): avisa e identifica a via", () => {
+    const offline = pendente.replace("<tpEmis>1</tpEmis>", "<tpEmis>9</tpEmis>");
+    expect(lerDanfeNfce(offline).contingencia).toBe(true);
+    const texto = paraTexto(montarDanfeNfce(offline, { via: "estabelecimento" }));
+    expect(texto).toContain("EMITIDA EM CONTINGÊNCIA");
+    expect(texto).toContain("Pendente de autorização");
+    expect(texto).toContain("VIA DO ESTABELECIMENTO");
+    expect(paraTexto(montarDanfeNfce(pendente))).not.toContain("CONTINGÊNCIA");
+  });
 });
 
 describe("ESC/POS", () => {

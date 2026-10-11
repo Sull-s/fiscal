@@ -23,7 +23,12 @@ export type SituacaoAutorizacao =
   /** 539: o número já foi usado com outra chave; tente o próximo número */
   | "numero-em-uso"
   /** Sem resposta: a SEFAZ pode ter autorizado. Consulte pela chave antes de qualquer outra coisa */
-  | "pendente";
+  | "pendente"
+  /**
+   * Só em `emitirNfce` com contingência: a SEFAZ estava fora e a nota saiu offline (tpEmis 9).
+   * Vale para o consumidor; transmita com `transmitirNfceOffline` assim que a SEFAZ voltar.
+   */
+  | "offline";
 
 export interface ResultadoAutorizacao {
   situacao: SituacaoAutorizacao;
@@ -288,4 +293,22 @@ export async function inutilizarNumeracao(
         }
       : {}),
   };
+}
+
+/**
+ * Transmite uma NFC-e emitida em contingência offline (a mesma que foi impressa, sem alterar nada).
+ * Pode ser chamada de novo sem risco: se a SEFAZ já tiver autorizado, devolve o protocolo (204).
+ * Rejeitada: a venda já aconteceu; corrija o problema e emita de novo (o cupom impresso não vale).
+ */
+export async function transmitirNfceOffline(
+  cliente: ClienteSefaz,
+  pedido: { uf: Uf; ambiente: 1 | 2; xmlAssinado: string },
+): Promise<ResultadoAutorizacao> {
+  if (!/<tpEmis>9<\/tpEmis>/.test(pedido.xmlAssinado)) {
+    throw new ErroFiscal(
+      "NFCE_NAO_E_OFFLINE",
+      "Esta NFC-e não foi emitida em contingência offline (tpEmis 9).",
+    );
+  }
+  return autorizarNfce(cliente, pedido);
 }

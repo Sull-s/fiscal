@@ -12,7 +12,16 @@ export interface Empresa {
   cnpj: string;
   /** 1 produção, 2 homologação */
   ambiente: 1 | 2;
-  nfce?: { emitente: EmitenteNfce; serie: string; versaoAplicativo?: string };
+  nfce?: {
+    emitente: EmitenteNfce;
+    serie: string;
+    versaoAplicativo?: string;
+    /**
+     * SEFAZ fora do ar na hora da venda: emite em contingência offline em vez de falhar.
+     * As notas offline precisam ser transmitidas depois (POST /v1/nfce/offline/transmitir).
+     */
+    contingenciaOffline?: boolean;
+  };
   nfse?: { prestador: Prestador; serie: string; versaoAplicativo?: string };
   certificado?: {
     /** .pfx cifrado pelo cofre */

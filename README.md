@@ -25,7 +25,7 @@ pnpm changeset     # registra uma mudança para a próxima versão
 | `@fiscal/certificado` | ✅ 0.1.0 | Certificado A1 (.pfx): leitura (inclusive RC2-40 legado), cadeia para mTLS, validade, raiz do CNPJ |
 | `@fiscal/xml` | ✅ 0.1.0 | Montagem de XML, assinatura XMLDSig (SEFAZ e NFS-e Nacional), verificação e validação XSD |
 | `@fiscal/transporte` | ✅ 0.1.0 | SOAP 1.2 + mTLS com raízes ICP-Brasil, catálogo de webservices de todas as UFs (NF-e e NFC-e, SVC), nova tentativa segura, status e relógio da SEFAZ |
-| `@fiscal/nfce` | ✅ 0.1.0 | NFC-e (modelo 65, Simples/MEI): montar, QR Code v3, emitir, consultar, cancelar, inutilizar. Falta: contingência offline e regime normal |
+| `@fiscal/nfce` | ✅ 0.1.0 | NFC-e (modelo 65, Simples/MEI): montar, QR Code v3, emitir, consultar, cancelar, inutilizar, contingência offline (QR assinado, transmissão posterior, cancelamento por substituição). Falta: regime normal |
 | `@fiscal/nfse-nacional` | ✅ 0.1.0 | NFS-e padrão nacional: DPS, assinatura, emissão, pendentes (consulta por DPS), cancelamento, leitura da NFS-e |
 | `@fiscal/documentos` | ✅ 0.1.0 | DANFE NFC-e a partir do XML (ESC/POS com QR nativo, HTML, texto; 80 e 58 mm) e DANFSE v2.0 em PDF. Falta: DANFE A4 da NF-e |
 | `@fiscal/armazenamento` | ✅ 0.1.0 | Guarda de XML/PDF por 5 anos (disco atômico, memória ou qualquer storage) e ZIP mensal com SHA-256 |

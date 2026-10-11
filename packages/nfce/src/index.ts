@@ -15,6 +15,7 @@ export {
   cancelarNfce,
   consultarNfce,
   inutilizarNumeracao,
+  transmitirNfceOffline,
 } from "./sefaz";
 export { type EmissaoNfce, emitirNfce } from "./emitir";
 export { URLS_CONSULTA_NFCE } from "./urls-consulta";

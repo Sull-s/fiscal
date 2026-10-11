@@ -30,6 +30,10 @@ function documento(doc: string): string {
  * Evento de cancelamento (110111), pronto para assinar
  * (`assinarXml(xml, { elemento: "infEvento", perfil: "sefaz", certificado })`).
  * O prazo de cancelamento da NFC-e é curto (em geral 30 minutos após a autorização; varia por UF).
+ *
+ * Com `chaveSubstituta`, vira cancelamento por substituição (110112): a nota online que ficou
+ * pendente acabou autorizada, mas a venda já tinha saído em contingência offline com outra chave.
+ * Esse evento tem prazo maior que o cancelamento comum.
  */
 export function montarCancelamento(dados: {
   chave: string;
@@ -42,6 +46,10 @@ export function montarCancelamento(dados: {
   sequencia?: number;
   dataEvento?: Date;
   fuso?: string;
+  /** Chave da NFC-e (offline) que substitui esta */
+  chaveSubstituta?: string;
+  /** verAplic do cancelamento por substituição. Padrão "@fiscal/nfce" */
+  versaoAplicativo?: string;
 }): { xml: string; id: string } {
   const xJust = exigirJustificativa(dados.justificativa);
   if (!validarChaveAcesso(dados.chave)) {
@@ -55,18 +63,35 @@ export function montarCancelamento(dados: {
     );
   }
 
+  const substituta = dados.chaveSubstituta;
+  if (substituta !== undefined && (!validarChaveAcesso(substituta) || substituta === dados.chave)) {
+    throw new ErroFiscal("CHAVE_INVALIDA", "Chave da nota substituta inválida.", {
+      chave: substituta,
+    });
+  }
+  const tpEvento = substituta ? "110112" : "110111";
+  const detalhe = substituta
+    ? "<descEvento>Cancelamento por substituicao</descEvento>" +
+      tag("cOrgaoAutor", dados.chave.slice(0, 2)) +
+      tag("tpAutor", "1") +
+      texto("verAplic", dados.versaoAplicativo ?? "@fiscal/nfce", 20) +
+      tag("nProt", nProt) +
+      texto("xJust", xJust) +
+      tag("chNFeRef", substituta)
+    : `<descEvento>Cancelamento</descEvento>${tag("nProt", nProt)}${texto("xJust", xJust)}`;
+
   const sequencia = dados.sequencia ?? 1;
-  const id = `ID110111${dados.chave}${String(sequencia).padStart(2, "0")}`;
+  const id = `ID${tpEvento}${dados.chave}${String(sequencia).padStart(2, "0")}`;
   const corpo =
     tag("cOrgao", dados.chave.slice(0, 2)) +
     tag("tpAmb", dados.ambiente) +
     documento(dados.documentoEmitente) +
     tag("chNFe", dados.chave) +
     tag("dhEvento", formatarDataHoraSefaz(dados.dataEvento ?? new Date(), dados.fuso)) +
-    tag("tpEvento", "110111") +
+    tag("tpEvento", tpEvento) +
     tag("nSeqEvento", sequencia) +
     tag("verEvento", "1.00") +
-    `<detEvento versao="1.00"><descEvento>Cancelamento</descEvento>${tag("nProt", nProt)}${texto("xJust", xJust)}</detEvento>`;
+    `<detEvento versao="1.00">${detalhe}</detEvento>`;
 
   return {
     xml: `<evento xmlns="${NS_NFE}" versao="1.00"><infEvento Id="${id}">${corpo}</infEvento></evento>`,

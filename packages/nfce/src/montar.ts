@@ -1,3 +1,5 @@
+import { createSign } from "node:crypto";
+import type { CertificadoA1 } from "@fiscal/certificado";
 import {
   ErroFiscal,
   anoMesDaEmissao,
@@ -6,7 +8,15 @@ import {
   gerarCodigoNumerico,
   montarChaveAcesso,
 } from "@fiscal/core";
-import { escaparTexto, formatarDecimal, grupo, somenteDigitos, tag, texto } from "@fiscal/xml";
+import {
+  escaparTexto,
+  formatarDecimal,
+  grupo,
+  limparTexto,
+  somenteDigitos,
+  tag,
+  texto,
+} from "@fiscal/xml";
 import type { DadosNota, EmitenteNfce, ItemVenda, NfceMontada, Pagamento, Venda } from "./tipos";
 import { URLS_CONSULTA_NFCE } from "./urls-consulta";
 import { CST_PIS_NAO_TRIBUTADO, cstPisCofins, validarEmitente, validarVenda } from "./validacao";
@@ -91,14 +101,65 @@ function pagamento(p: Pagamento): string {
 }
 
 /**
+ * QR Code v3 (NT 2025.001). Online: só chave, versão e ambiente (o CSC não entra mais).
+ * Offline: dia da emissão, valor e destinatário, mais a assinatura RSA-SHA1 desses campos com a
+ * chave do certificado, em base64 (o consumidor consegue conferir a nota antes de ela chegar à SEFAZ).
+ */
+function parametrosQrCode(d: {
+  chave: string;
+  tpAmb: 1 | 2;
+  offline: boolean;
+  dhEmi: string;
+  vNF: string;
+  docDestinatario: string;
+  chavePrivadaPem?: string | undefined;
+}): string {
+  const base = `${d.chave}|3|${d.tpAmb}`;
+  if (!d.offline) return base;
+  // 1 CNPJ · 2 CPF · vazio quando não há destinatário identificado
+  const doc = d.docDestinatario;
+  const tpIdDest = doc.length === 14 ? "1" : doc.length === 11 ? "2" : "";
+  const campos = `${base}|${d.dhEmi.slice(8, 10)}|${d.vNF}|${tpIdDest}|${doc}`;
+  const assinatura = createSign("RSA-SHA1")
+    .update(campos, "utf8")
+    .sign(d.chavePrivadaPem ?? "", "base64");
+  return `${campos}|${assinatura}`;
+}
+
+function validarContingencia(
+  contingencia: NonNullable<DadosNota["contingencia"]>,
+  emissao: Date,
+  temCertificado: boolean,
+): string {
+  const problemas: string[] = [];
+  const xJust = limparTexto(contingencia.justificativa, 256);
+  if (xJust.length < 15)
+    problemas.push("Justificativa da contingência precisa de 15 a 256 caracteres.");
+  if (Number.isNaN(contingencia.inicio.getTime()))
+    problemas.push("Início da contingência inválido.");
+  // A SEFAZ compara em segundos; 1 s de folga para a hora da emissão truncada
+  else if (contingencia.inicio.getTime() > emissao.getTime() + 1000)
+    problemas.push("A contingência não pode começar depois da emissão da nota.");
+  if (!temCertificado)
+    problemas.push("Contingência offline exige o certificado na montagem (assinatura do QR Code).");
+  if (problemas.length) {
+    throw new ErroFiscal("NFCE_CONTINGENCIA_INVALIDA", problemas.join(" "), { problemas });
+  }
+  return xJust;
+}
+
+/**
  * Monta a NFC-e (modelo 65, leiaute 4.00) de uma venda, com QR Code v3, pronta para assinar
  * (`assinarXml(xml, { elemento: "infNFe", perfil: "sefaz", certificado })`).
+ * Com `nota.contingencia`, monta em contingência offline (tpEmis 9) e precisa do `certificado`.
  * Lança ErroFiscal com todos os problemas de cadastro/venda de uma vez.
  */
 export function montarNfce(entrada: {
   emitente: EmitenteNfce;
   venda: Venda;
   nota: DadosNota;
+  /** Só usado (e obrigatório) em contingência offline */
+  certificado?: Pick<CertificadoA1, "chavePrivadaPem">;
 }): NfceMontada {
   const { emitente, venda, nota } = entrada;
   validarEmitente(emitente);
@@ -114,7 +175,13 @@ export function montarNfce(entrada: {
   const uf = end.uf;
   const tpAmb = nota.ambiente;
   const homologacao = tpAmb === 2;
-  const dhEmi = formatarDataHoraSefaz(nota.dataEmissao ?? new Date(), nota.fuso);
+  const emissao = nota.dataEmissao ?? new Date();
+  const dhEmi = formatarDataHoraSefaz(emissao, nota.fuso);
+  const contingencia = nota.contingencia;
+  const offline = contingencia !== undefined;
+  const xJustCont = contingencia
+    ? validarContingencia(contingencia, emissao, Boolean(entrada.certificado?.chavePrivadaPem))
+    : "";
   const cnpj = somenteDigitos(emitente.cnpj);
   const cNF = nota.codigoNumerico ?? gerarCodigoNumerico(nota.numero);
   const chave = montarChaveAcesso({
@@ -124,7 +191,7 @@ export function montarNfce(entrada: {
     modelo: "65",
     serie: nota.serie,
     numero: nota.numero,
-    tipoEmissao: 1,
+    tipoEmissao: offline ? 9 : 1,
     codigoNumerico: cNF,
   });
 
@@ -168,7 +235,7 @@ export function montarNfce(entrada: {
     tag("idDest", "1") +
     tag("cMunFG", somenteDigitos(end.codigoMunicipio)) +
     tag("tpImp", "4") +
-    tag("tpEmis", "1") +
+    tag("tpEmis", offline ? "9" : "1") +
     tag("cDV", chave.slice(-1)) +
     tag("tpAmb", tpAmb) +
     tag("finNFe", "1") +
@@ -178,6 +245,10 @@ export function montarNfce(entrada: {
     (venda.entrega ? tag("indIntermed", "0") : "") +
     tag("procEmi", "0") +
     texto("verProc", nota.versaoAplicativo ?? "@fiscal/nfce", 20) +
+    (contingencia
+      ? tag("dhCont", formatarDataHoraSefaz(contingencia.inicio, nota.fuso)) +
+        texto("xJust", xJustCont)
+      : "") +
     "</ide>";
 
   const emit =
@@ -291,8 +362,15 @@ export function montarNfce(entrada: {
 
   const corpo = ide + emit + dest + det + total + transp + pag + infAdic + infRespTec;
   const urls = URLS_CONSULTA_NFCE[uf][tpAmb];
-  // QR Code v3 (emissão online): só chave, versão e ambiente; o CSC não entra mais
-  const qrCode = `${urls.qrCode}?p=${chave}|3|${tpAmb}`;
+  const qrCode = `${urls.qrCode}?p=${parametrosQrCode({
+    chave,
+    tpAmb,
+    offline,
+    dhEmi,
+    vNF: dec(vNF),
+    docDestinatario: doc,
+    chavePrivadaPem: entrada.certificado?.chavePrivadaPem,
+  })}`;
   const infNFeSupl = `<infNFeSupl><qrCode>${escaparTexto(qrCode)}</qrCode><urlChave>${escaparTexto(urls.urlChave)}</urlChave></infNFeSupl>`;
   const xml = `<NFe xmlns="${NS_NFE}"><infNFe Id="NFe${chave}" versao="4.00">${corpo}</infNFe>${infNFeSupl}</NFe>`;
 
@@ -307,5 +385,6 @@ export function montarNfce(entrada: {
     troco: reais(troco),
     qrCode,
     urlConsulta: urls.urlChave,
+    offline,
   };
 }

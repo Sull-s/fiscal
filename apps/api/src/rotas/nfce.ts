@@ -1,5 +1,12 @@
 import { montarDanfeNfce, paraEscPos, paraHtml, paraTexto } from "@fiscal/documentos";
-import { type Venda, cancelarNfce, consultarNfce, emitirNfce } from "@fiscal/nfce";
+import {
+  type ResultadoAutorizacao,
+  type Venda,
+  cancelarNfce,
+  consultarNfce,
+  emitirNfce,
+  transmitirNfceOffline,
+} from "@fiscal/nfce";
 import type { Serie } from "@fiscal/numeracao";
 import { type Context, Hono } from "hono";
 import type { Empresa } from "../empresas";
@@ -7,6 +14,7 @@ import { type Ambiente, falhar, lerCorpo } from "../http";
 import type { RegistroNota } from "../registros";
 
 const MODELO = "65" as const;
+const JUSTIFICATIVA_OFFLINE = "SEFAZ indisponivel no momento da venda";
 
 export function rotasNfce() {
   const app = new Hono<Ambiente>();
@@ -26,8 +34,135 @@ export function rotasNfce() {
     chave: r.id,
     dataEmissao: r.dataEmissao,
   });
+  const serieDe = (empresa: Empresa, r: Pick<RegistroNota, "ambiente" | "serie">): Serie => ({
+    empresa: empresa.id,
+    modelo: MODELO,
+    ambiente: r.ambiente,
+    serie: r.serie,
+  });
 
-  /** Emite. Header opcional Idempotency-Key: repetir o pedido devolve a mesma resposta. */
+  /** Guarda o nfeProc, marca o número e atualiza o registro de uma nota autorizada. */
+  async function guardarAutorizada(
+    c: Context<Ambiente>,
+    r: RegistroNota,
+    autorizacao: Pick<ResultadoAutorizacao, "protocolo" | "xmlProcessado" | "motivo">,
+  ) {
+    const empresa = c.get("empresa");
+    const ctx = c.get("ctx");
+    if (autorizacao.xmlProcessado) {
+      await ctx.arquivoFiscal.guardar(documento(empresa, r), "nota", autorizacao.xmlProcessado);
+    }
+    await ctx.numeracao.registrar(serieDe(empresa, r), r.numero, "autorizado", r.id);
+    Object.assign(r, {
+      situacao: "autorizada",
+      motivo: autorizacao.motivo,
+      ...(autorizacao.protocolo ? { protocolo: autorizacao.protocolo } : {}),
+      atualizadaEm: new Date().toISOString(),
+    });
+    await ctx.registros.salvar(empresa.id, r);
+  }
+
+  /**
+   * Tentativa online sem resposta que acabou autorizada, mas a venda já tinha saído offline com
+   * outra chave: cancela a online por substituição (110112). A SEFAZ só aceita depois que a
+   * offline foi autorizada; até lá não faz nada.
+   */
+  async function cancelarSubstituida(c: Context<Ambiente>, original: RegistroNota) {
+    const empresa = c.get("empresa");
+    const ctx = c.get("ctx");
+    if (original.situacao !== "autorizada" || !original.substituidaPor || !original.protocolo) {
+      return;
+    }
+    const substituta = await ctx.registros.obter(
+      empresa.id,
+      MODELO,
+      original.ambiente,
+      original.substituidaPor,
+    );
+    if (substituta?.situacao !== "autorizada") return;
+    const resultado = await cancelarNfce(ctx.sefaz(empresa), {
+      uf: config(c).emitente.endereco.uf,
+      ambiente: original.ambiente,
+      chave: original.id,
+      protocolo: original.protocolo,
+      justificativa: "Venda emitida em contingencia offline com outra chave",
+      documentoEmitente: empresa.cnpj,
+      certificado: ctx.certificado(empresa),
+      chaveSubstituta: substituta.id,
+      versaoAplicativo: config(c).versaoAplicativo ?? "@fiscal/api",
+    });
+    if (!resultado.registrado) {
+      original.motivo = `Cancelamento por substituição recusado: ${resultado.cStat} ${resultado.motivo}`;
+      await ctx.registros.salvar(empresa.id, original);
+      return;
+    }
+    await ctx.arquivoFiscal.guardar(
+      documento(empresa, original),
+      "evento",
+      resultado.xmlProcessado ?? "",
+      "cancelamento",
+    );
+    Object.assign(original, {
+      situacao: "cancelada",
+      motivo: resultado.motivo,
+      atualizadaEm: new Date().toISOString(),
+    });
+    await ctx.registros.salvar(empresa.id, original);
+  }
+
+  /** Transmite uma NFC-e offline e atualiza o registro. Erro de comunicação sobe para quem chamou. */
+  async function transmitir(c: Context<Ambiente>, r: RegistroNota) {
+    const empresa = c.get("empresa");
+    const ctx = c.get("ctx");
+    const xmlAssinado = await ctx.arquivoFiscal.lerTexto(documento(empresa, r), "nota");
+    if (!xmlAssinado) {
+      return falhar(404, "XML_NAO_ENCONTRADO", "XML da nota offline não encontrado.");
+    }
+    const resultado = await transmitirNfceOffline(ctx.sefaz(empresa), {
+      uf: config(c).emitente.endereco.uf,
+      ambiente: r.ambiente,
+      xmlAssinado,
+    });
+    switch (resultado.situacao) {
+      case "autorizada": {
+        await guardarAutorizada(c, r, resultado);
+        await ctx.registros.marcarOffline(empresa.id, r.ambiente, r.id, false);
+        const original = r.substitui
+          ? await ctx.registros.obter(empresa.id, MODELO, r.ambiente, r.substitui)
+          : null;
+        if (original) await cancelarSubstituida(c, original);
+        return r;
+      }
+      case "denegada":
+        if (resultado.xmlProcessado) {
+          await ctx.arquivoFiscal.guardar(documento(empresa, r), "nota", resultado.xmlProcessado);
+        }
+        await ctx.numeracao.registrar(serieDe(empresa, r), r.numero, "denegado", r.id);
+        Object.assign(r, { situacao: "denegada", motivo: resultado.motivo });
+        await ctx.registros.marcarOffline(empresa.id, r.ambiente, r.id, false);
+        break;
+      case "rejeitada":
+      case "numero-em-uso":
+        // A venda aconteceu e o cupom foi impresso: alguém precisa corrigir e emitir de novo
+        Object.assign(r, {
+          situacao: "offline-rejeitada",
+          motivo: `${resultado.cStat} ${resultado.motivo}`,
+        });
+        await ctx.registros.marcarOffline(empresa.id, r.ambiente, r.id, false);
+        break;
+      default:
+        // Sem resposta: continua offline e vai de novo na próxima transmissão
+        r.motivo = resultado.motivo;
+    }
+    r.atualizadaEm = new Date().toISOString();
+    await ctx.registros.salvar(empresa.id, r);
+    return r;
+  }
+
+  /**
+   * Emite. Header opcional Idempotency-Key: repetir o pedido devolve a mesma resposta.
+   * Com `contingenciaOffline` no cadastro, SEFAZ fora do ar vira nota offline (202, situacao "offline").
+   */
   app.post("/", async (c) => {
     const empresa = c.get("empresa");
     const ctx = c.get("ctx");
@@ -59,6 +194,9 @@ export function rotasNfce() {
           serie: Number(nfce.serie),
           ...(nfce.versaoAplicativo ? { versaoAplicativo: nfce.versaoAplicativo } : {}),
         },
+        ...(nfce.contingenciaOffline
+          ? { contingencia: { justificativa: JUSTIFICATIVA_OFFLINE } }
+          : {}),
         proximoNumero: async () => {
           const n = await ctx.numeracao.reservar(serie, referencia);
           reservados.push(n);
@@ -78,6 +216,7 @@ export function rotasNfce() {
       autorizada: "autorizado",
       denegada: "denegado",
       pendente: "pendente",
+      offline: "pendente",
       rejeitada: "liberado",
     } as const;
     await ctx.numeracao.registrar(
@@ -86,6 +225,31 @@ export function rotasNfce() {
       situacaoNumero[autorizacao.situacao as keyof typeof situacaoNumero],
       nota.chave,
     );
+
+    // Tentativa online sem resposta antes da offline: fica pendente. Se a SEFAZ a tiver autorizado,
+    // é cancelada por substituição depois que a offline for transmitida.
+    const tentativa = emissao.tentativaOnlinePendente;
+    if (tentativa) {
+      const agora = new Date().toISOString();
+      const original: RegistroNota = {
+        id: tentativa.nota.chave,
+        chave: tentativa.nota.chave,
+        modelo: MODELO,
+        ambiente: empresa.ambiente,
+        numero: tentativa.nota.numero,
+        serie: nfce.serie,
+        dataEmissao: tentativa.nota.dataEmissao,
+        situacao: "pendente",
+        valorTotal: tentativa.nota.valorTotal,
+        substituidaPor: nota.chave,
+        motivo: "Sem resposta da SEFAZ; venda refeita em contingência offline",
+        criadaEm: agora,
+        atualizadaEm: agora,
+      };
+      await ctx.arquivoFiscal.guardar(documento(empresa, original), "nota", tentativa.xmlAssinado);
+      await ctx.numeracao.registrar(serie, original.numero, "pendente", original.id);
+      await ctx.registros.salvar(empresa.id, original);
+    }
 
     const corpo = {
       chave: nota.chave,
@@ -100,6 +264,7 @@ export function rotasNfce() {
       qrCode: nota.qrCode,
       urlConsulta: nota.urlConsulta,
       dataEmissao: nota.dataEmissao,
+      ...(tentativa ? { substitui: tentativa.nota.chave } : {}),
     };
 
     let status: 201 | 202 | 422 = 201;
@@ -116,11 +281,11 @@ export function rotasNfce() {
         serie: nfce.serie,
         dataEmissao: nota.dataEmissao,
         situacao:
-          autorizacao.situacao === "pendente"
-            ? "pendente"
-            : autorizacao.situacao === "denegada"
-              ? "denegada"
-              : "autorizada",
+          autorizacao.situacao === "pendente" ||
+          autorizacao.situacao === "offline" ||
+          autorizacao.situacao === "denegada"
+            ? autorizacao.situacao
+            : "autorizada",
         ...(autorizacao.protocolo ? { protocolo: autorizacao.protocolo } : {}),
         valorTotal: nota.valorTotal,
         troco: nota.troco,
@@ -128,21 +293,68 @@ export function rotasNfce() {
         urlConsulta: nota.urlConsulta,
         motivo: autorizacao.motivo,
         ...(referencia ? { referencia } : {}),
+        ...(tentativa ? { substitui: tentativa.nota.chave } : {}),
         criadaEm: agora,
         atualizadaEm: agora,
       };
-      // Pendente: guarda a NFe assinada; autorizada/denegada: o nfeProc com o protocolo
+      // Pendente/offline: guarda a NFe assinada; autorizada/denegada: o nfeProc com o protocolo
       await ctx.arquivoFiscal.guardar(
         documento(empresa, registro),
         "nota",
         autorizacao.xmlProcessado ?? emissao.xmlAssinado,
       );
       await ctx.registros.salvar(empresa.id, registro);
-      if (autorizacao.situacao === "pendente") status = 202;
+      if (autorizacao.situacao === "offline") {
+        await ctx.registros.marcarOffline(empresa.id, empresa.ambiente, nota.chave, true);
+      }
+      if (autorizacao.situacao === "pendente" || autorizacao.situacao === "offline") status = 202;
     }
     if (chaveIdem)
       await ctx.registros.guardarRespostaIdempotente(empresa.id, chaveIdem, status, corpo);
     return c.json(corpo, status);
+  });
+
+  /** Chaves das NFC-e offline ainda não transmitidas. */
+  app.get("/offline", async (c) => {
+    const empresa = c.get("empresa");
+    return c.json({
+      chaves: await c.get("ctx").registros.listarOffline(empresa.id, empresa.ambiente),
+    });
+  });
+
+  /**
+   * Transmite as NFC-e offline, das mais antigas para as mais novas. Chame quando a SEFAZ voltar
+   * (ou de tempos em tempos). Se a SEFAZ ainda estiver fora, para na primeira falha.
+   */
+  app.post("/offline/transmitir", async (c) => {
+    const empresa = c.get("empresa");
+    const ctx = c.get("ctx");
+    config(c);
+    const transmitidas: { chave: string; situacao: string; motivo?: string }[] = [];
+    for (const chave of await ctx.registros.listarOffline(empresa.id, empresa.ambiente)) {
+      const r = await ctx.registros.obter(empresa.id, MODELO, empresa.ambiente, chave);
+      if (r?.situacao !== "offline") {
+        await ctx.registros.marcarOffline(empresa.id, empresa.ambiente, chave, false);
+        continue;
+      }
+      try {
+        const t = await transmitir(c, r);
+        transmitidas.push({
+          chave,
+          situacao: t.situacao,
+          ...(t.motivo ? { motivo: t.motivo } : {}),
+        });
+      } catch (erro) {
+        transmitidas.push({
+          chave,
+          situacao: "offline",
+          motivo: erro instanceof Error ? erro.message : String(erro),
+        });
+        break;
+      }
+    }
+    const restantes = (await ctx.registros.listarOffline(empresa.id, empresa.ambiente)).length;
+    return c.json({ transmitidas, restantes });
   });
 
   const obterRegistro = async (c: Context<Ambiente>) => {
@@ -158,6 +370,7 @@ export function rotasNfce() {
     const empresa = c.get("empresa");
     const ctx = c.get("ctx");
     const r = await obterRegistro(c);
+    if (r.situacao === "autorizada" && r.substituidaPor) await cancelarSubstituida(c, r);
     if (r.situacao !== "pendente") return c.json(r);
 
     const xmlNota = (await ctx.arquivoFiscal.lerTexto(documento(empresa, r), "nota")) ?? "";
@@ -167,22 +380,14 @@ export function rotasNfce() {
       chave: r.id,
       xmlNota,
     });
-    const serie: Serie = {
-      empresa: empresa.id,
-      modelo: MODELO,
-      ambiente: r.ambiente,
-      serie: r.serie,
-    };
     if (consulta.situacao === "autorizada" && consulta.xmlProcessado) {
-      await ctx.arquivoFiscal.guardar(documento(empresa, r), "nota", consulta.xmlProcessado);
-      await ctx.numeracao.registrar(serie, r.numero, "autorizado", r.id);
-      Object.assign(r, {
-        situacao: "autorizada",
-        ...(consulta.protocolo ? { protocolo: consulta.protocolo } : {}),
-      });
-    } else if (consulta.situacao === "nao-encontrada") {
+      await guardarAutorizada(c, r, consulta);
+      if (r.substituidaPor) await cancelarSubstituida(c, r);
+      return c.json(r);
+    }
+    if (consulta.situacao === "nao-encontrada") {
       // A SEFAZ nunca recebeu: o número volta para a numeração
-      await ctx.numeracao.registrar(serie, r.numero, "liberado");
+      await ctx.numeracao.registrar(serieDe(empresa, r), r.numero, "liberado");
       r.situacao = "nao-recebida";
     } else if (consulta.situacao === "cancelada" || consulta.situacao === "denegada") {
       r.situacao = consulta.situacao;
@@ -201,13 +406,17 @@ export function rotasNfce() {
       : falhar(404, "XML_NAO_ENCONTRADO", "XML não encontrado.");
   });
 
-  /** DANFE NFC-e. ?formato=escpos|html|texto (padrão html) &papel=80|58 */
+  /** DANFE NFC-e. ?formato=escpos|html|texto (padrão html) &papel=80|58 &via=consumidor|estabelecimento */
   app.get("/:chave/danfe", async (c) => {
     const r = await obterRegistro(c);
     const xml = await c.get("ctx").arquivoFiscal.lerTexto(documento(c.get("empresa"), r), "nota");
     if (!xml) return falhar(404, "XML_NAO_ENCONTRADO", "XML não encontrado.");
     const papel = c.req.query("papel") === "58" ? 58 : 80;
-    const linhas = montarDanfeNfce(xml, { cancelada: r.situacao === "cancelada" });
+    const via = c.req.query("via");
+    const linhas = montarDanfeNfce(xml, {
+      cancelada: r.situacao === "cancelada",
+      ...(via === "estabelecimento" || via === "consumidor" ? { via } : {}),
+    });
     switch (c.req.query("formato") ?? "html") {
       case "escpos":
         return c.body(new Uint8Array(paraEscPos(linhas, { papel })), 200, {

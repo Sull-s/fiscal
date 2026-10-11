@@ -23,6 +23,8 @@ const FORMAS: Record<string, string> = {
 
 export interface DadosDanfeNfce {
   ambiente: 1 | 2;
+  /** Emitida em contingência offline (tpEmis 9) */
+  contingencia: boolean;
   chave: string;
   numero: string;
   serie: string;
@@ -89,6 +91,7 @@ export function lerDanfeNfce(xml: string): DadosDanfeNfce {
 
   return {
     ambiente: s(ide.tpAmb) === "1" ? 1 : 2,
+    contingencia: s(ide.tpEmis) === "9",
     chave: s(inf["@Id"]).replace(/^NFe/, ""),
     numero: s(ide.nNF),
     serie: s(ide.serie),
@@ -154,10 +157,12 @@ export function lerDanfeNfce(xml: string): DadosDanfeNfce {
 /**
  * DANFE NFC-e (Manual de Especificações Técnicas do DANFE NFC-e e QR Code) como linhas de cupom.
  * `cancelada`: imprime a faixa NOTA CANCELADA (o XML da nota não diz isso; vem do seu cadastro).
+ * `via`: em contingência offline, imprima também a via do estabelecimento e guarde-a até a nota
+ * ser autorizada.
  */
 export function montarDanfeNfce(
   entrada: string | DadosDanfeNfce,
-  opcoes: { cancelada?: boolean } = {},
+  opcoes: { cancelada?: boolean; via?: "consumidor" | "estabelecimento" } = {},
 ): LinhaTermica[] {
   const d = typeof entrada === "string" ? lerDanfeNfce(entrada) : entrada;
   const homologacao = d.ambiente !== 1;
@@ -252,9 +257,17 @@ export function montarDanfeNfce(
       texto(`Protocolo de autorização: ${d.protocolo.numero}`, { alinhar: "centro" }),
       texto(`Data de autorização: ${dataHora(d.protocolo.data)}`, { alinhar: "centro" }),
     );
-  } else {
+  } else if (d.contingencia) {
     add(
-      texto("EMITIDA EM CONTINGÊNCIA / AGUARDANDO AUTORIZAÇÃO", {
+      texto("EMITIDA EM CONTINGÊNCIA", { alinhar: "centro", negrito: true }),
+      texto("Pendente de autorização", { alinhar: "centro" }),
+    );
+  } else {
+    add(texto("NOTA AINDA NÃO AUTORIZADA PELA SEFAZ", { alinhar: "centro", negrito: true }));
+  }
+  if (opcoes.via) {
+    add(
+      texto(opcoes.via === "estabelecimento" ? "VIA DO ESTABELECIMENTO" : "VIA DO CONSUMIDOR", {
         alinhar: "centro",
         negrito: true,
       }),

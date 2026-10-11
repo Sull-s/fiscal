@@ -6,7 +6,11 @@ export type SituacaoRegistro =
   | "denegada"
   | "cancelada"
   /** A SEFAZ/Sistema Nacional nunca recebeu: o número foi devolvido para a numeração */
-  | "nao-recebida";
+  | "nao-recebida"
+  /** NFC-e emitida em contingência offline, ainda não transmitida */
+  | "offline"
+  /** NFC-e offline que a SEFAZ rejeitou na transmissão: precisa de correção manual */
+  | "offline-rejeitada";
 
 /** Estado de cada nota emitida pela API (índice por chave; na NFS-e, por Id da DPS). */
 export interface RegistroNota {
@@ -26,6 +30,10 @@ export interface RegistroNota {
   qrCode?: string;
   urlConsulta?: string;
   troco?: number;
+  /** Tentativa online sem resposta que foi substituída por esta nota offline (chave) */
+  substitui?: string;
+  /** Nota offline que substituiu esta tentativa online (chave) */
+  substituidaPor?: string;
   criadaEm: string;
   atualizadaEm: string;
 }
@@ -61,6 +69,25 @@ export function criarRegistros(armazem: ArmazemArquivos) {
       if (direto) return direto;
       const apelido = await ler<{ id: string }>(armazem, `${b}/chave-${segura(idOuChave)}.json`);
       return apelido ? ler<RegistroNota>(armazem, `${b}/${segura(apelido.id)}.json`) : null;
+    },
+
+    /** Marca/desmarca NFC-e offline que ainda precisa ser transmitida. */
+    async marcarOffline(empresa: string, ambiente: number, chave: string, pendente: boolean) {
+      const caminho = `_offline/${empresa}/${ambiente}/${segura(chave)}`;
+      await armazem.gravar(caminho, json({ pendente }), "application/json");
+    },
+    /** Chaves das NFC-e offline ainda não transmitidas, das mais antigas para as mais novas. */
+    async listarOffline(empresa: string, ambiente: number) {
+      const prefixo = `_offline/${empresa}/${ambiente}/`;
+      const chaves: string[] = [];
+      for (const caminho of await armazem.listar(prefixo)) {
+        const marca = await ler<{ pendente: boolean }>(armazem, caminho);
+        if (marca?.pendente) chaves.push(caminho.slice(prefixo.length));
+      }
+      // A chave começa por UF+AAMM e o número vem depois da série: ordena por AAMM, série e número
+      return chaves.sort((a, b) =>
+        (a.slice(2, 6) + a.slice(22, 34)).localeCompare(b.slice(2, 6) + b.slice(22, 34)),
+      );
     },
 
     /** Resposta guardada para um Idempotency-Key (repetir o pedido devolve a mesma coisa). */
