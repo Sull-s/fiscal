@@ -1,5 +1,8 @@
 import type { ArmazemArquivos } from "@fiscal/armazenamento";
 
+/** 55 NF-e · 65 NFC-e · nfse */
+export type ModeloRegistro = "55" | "65" | "nfse";
+
 export type SituacaoRegistro =
   | "autorizada"
   | "pendente"
@@ -15,7 +18,7 @@ export type SituacaoRegistro =
 /** Estado de cada nota emitida pela API (índice por chave; na NFS-e, por Id da DPS). */
 export interface RegistroNota {
   id: string;
-  modelo: "65" | "nfse";
+  modelo: ModeloRegistro;
   ambiente: 1 | 2;
   numero: number;
   serie: string;
@@ -34,6 +37,8 @@ export interface RegistroNota {
   substitui?: string;
   /** Nota offline que substituiu esta tentativa online (chave) */
   substituidaPor?: string;
+  /** NF-e: quantas cartas de correção já foram registradas */
+  cartasCorrecao?: number;
   criadaEm: string;
   atualizadaEm: string;
 }
@@ -96,7 +101,7 @@ export function criarRegistros(armazem: ArmazemArquivos, opcoes: OpcoesRegistros
       if (emAberto(registro.situacao)) await marcar(registro.situacao, true);
       await opcoes.aoMudarSituacao?.(empresa, registro, anterior);
     },
-    async obter(empresa: string, modelo: "65" | "nfse", ambiente: number, idOuChave: string) {
+    async obter(empresa: string, modelo: ModeloRegistro, ambiente: number, idOuChave: string) {
       const b = base(empresa, modelo, ambiente);
       const direto = await ler<RegistroNota>(armazem, `${b}/${segura(idOuChave)}.json`);
       if (direto) return direto;
@@ -110,7 +115,7 @@ export function criarRegistros(armazem: ArmazemArquivos, opcoes: OpcoesRegistros
      */
     async listarEmAberto(
       empresa: string,
-      modelo: "65" | "nfse",
+      modelo: ModeloRegistro,
       ambiente: number,
       situacao: SituacaoEmAberto,
     ) {
@@ -121,7 +126,7 @@ export function criarRegistros(armazem: ArmazemArquivos, opcoes: OpcoesRegistros
           ids.push(caminho.slice(prefixo.length));
         }
       }
-      const ordem = (id: string) => (modelo === "65" ? id.slice(2, 6) + id.slice(22, 34) : id);
+      const ordem = (id: string) => (modelo !== "nfse" ? id.slice(2, 6) + id.slice(22, 34) : id);
       return ids.sort((a, b) => ordem(a).localeCompare(ordem(b)));
     },
 

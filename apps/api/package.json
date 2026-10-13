@@ -18,6 +18,7 @@
     "@fiscal/core": "workspace:^",
     "@fiscal/documentos": "workspace:^",
     "@fiscal/nfce": "workspace:^",
+    "@fiscal/nfe": "workspace:^",
     "@fiscal/nfse-nacional": "workspace:^",
     "@fiscal/numeracao": "workspace:^",
     "@fiscal/transporte": "workspace:^",

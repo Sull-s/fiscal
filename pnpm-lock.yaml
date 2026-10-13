@@ -50,6 +50,9 @@ importers:
       '@fiscal/nfce':
         specifier: workspace:^
         version: link:../../packages/nfce
+      '@fiscal/nfe':
+        specifier: workspace:^
+        version: link:../../packages/nfe
       '@fiscal/nfse-nacional':
         specifier: workspace:^
         version: link:../../packages/nfse-nacional

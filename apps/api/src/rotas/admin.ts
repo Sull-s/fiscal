@@ -27,7 +27,9 @@ export function rotasAdmin(ctx: Contexto) {
   app.put("/empresas/:id", async (c) => {
     const id = validarIdEmpresa(c.req.param("id"));
     const corpo =
-      await lerCorpo<Partial<Pick<Empresa, "nome" | "cnpj" | "ambiente" | "nfce" | "nfse">>>(c);
+      await lerCorpo<
+        Partial<Pick<Empresa, "nome" | "cnpj" | "ambiente" | "nfce" | "nfse" | "nfe">>
+      >(c);
     const atual = await empresas.obter(id);
     const agora = new Date().toISOString();
     const empresa: Empresa = {
@@ -37,6 +39,7 @@ export function rotasAdmin(ctx: Contexto) {
       ambiente: corpo.ambiente ?? atual?.ambiente ?? 2,
       ...((corpo.nfce ?? atual?.nfce) ? { nfce: corpo.nfce ?? atual?.nfce } : {}),
       ...((corpo.nfse ?? atual?.nfse) ? { nfse: corpo.nfse ?? atual?.nfse } : {}),
+      ...((corpo.nfe ?? atual?.nfe) ? { nfe: corpo.nfe ?? atual?.nfe } : {}),
       ...(atual?.certificado ? { certificado: atual.certificado } : {}),
       chavesApi: atual?.chavesApi ?? [],
       ...(atual?.webhook ? { webhook: atual.webhook } : {}),

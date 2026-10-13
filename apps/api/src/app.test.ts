@@ -476,6 +476,101 @@ describe("arquivos para o contador", () => {
   });
 });
 
+describe("NF-e pela API", () => {
+  const operacao = {
+    destinatario: {
+      documento: "11222333000181",
+      nome: "Loja Cliente Ltda",
+      indicadorIe: 1,
+      inscricaoEstadual: "0240000000",
+      endereco: {
+        logradouro: "Rua dos Andradas",
+        numero: "500",
+        bairro: "Centro",
+        codigoMunicipio: "4314902",
+        municipio: "Porto Alegre",
+        uf: "RS",
+      },
+    },
+    itens: [
+      {
+        codigo: "CAD-01",
+        descricao: "Cadeira",
+        ncm: "94013000",
+        cfop: "5102",
+        quantidade: 2,
+        valorUnitario: 250,
+        tributacao: { icms: { csosn: "102" }, pis: { cst: "99" }, cofins: { cst: "99" } },
+      },
+    ],
+    pagamentos: [{ forma: "boleto", valor: 500, aPrazo: true }],
+  };
+  let chave = "";
+
+  it("sem cadastro de NF-e: 409", async () => {
+    const r = await req("POST", "/v1/nfe", chaveApi, {
+      operacao,
+      nota: { naturezaOperacao: "Venda" },
+    });
+    expect(r.status).toBe(409);
+  });
+
+  it("emite, devolve XML e DANFE em PDF", async () => {
+    await req("PUT", "/v1/admin/empresas/rose", ADMIN, {
+      nfe: { emitente: { ...emitente, crt: 1 }, serie: "1", versaoAplicativo: "Teste API" },
+    });
+    proximaAutorizacao = "100";
+    const r = await req("POST", "/v1/nfe", chaveApi, {
+      operacao,
+      nota: { naturezaOperacao: "Venda de mercadoria" },
+    });
+    expect(r.status).toBe(201);
+    const corpo = (await r.json()) as { chave: string; numero: number; situacao: string };
+    expect(corpo).toMatchObject({ numero: 1, situacao: "autorizada", valorTotal: 500 });
+    expect(corpo.chave.slice(20, 22)).toBe("55");
+    chave = corpo.chave;
+    expect(await (await req("GET", `/v1/nfe/${chave}/xml`, chaveApi)).text()).toMatch(/^<nfeProc /);
+    const pdf = await req("GET", `/v1/nfe/${chave}/danfe`, chaveApi);
+    expect(pdf.headers.get("Content-Type")).toBe("application/pdf");
+    expect(
+      Buffer.from(await pdf.arrayBuffer())
+        .subarray(0, 5)
+        .toString(),
+    ).toBe("%PDF-");
+    expect(await (await req("GET", "/v1/numeracao/55", chaveApi)).json()).toMatchObject({
+      proximo: 2,
+    });
+  });
+
+  it("NF-e inválida: 422 com os problemas explicados", async () => {
+    const r = await req("POST", "/v1/nfe", chaveApi, {
+      operacao: { ...operacao, itens: [{ ...operacao.itens[0], cfop: "6102" }] },
+      nota: { naturezaOperacao: "Venda" },
+    });
+    expect(r.status).toBe(422);
+    expect(((await r.json()) as { erro: { mensagem: string } }).erro.mensagem).toContain(
+      "CFOP 6102 não combina com saída dentro do estado",
+    );
+  });
+
+  it("carta de correção numerada sozinha e cancelamento", async () => {
+    const correcao = { correcao: "Endereco de entrega: Rua das Flores, 100, fundos" };
+    const cce1 = await (
+      await req("POST", `/v1/nfe/${chave}/carta-correcao`, chaveApi, correcao)
+    ).json();
+    const cce2 = await (
+      await req("POST", `/v1/nfe/${chave}/carta-correcao`, chaveApi, correcao)
+    ).json();
+    expect([cce1, cce2]).toMatchObject([{ sequencia: 1 }, { sequencia: 2 }]);
+    expect(eventosEnviados.at(-1)).toContain("<tpEvento>110110</tpEvento>");
+    expect(eventosEnviados.at(-1)).toContain("<nSeqEvento>2</nSeqEvento>");
+    const canc = await req("POST", `/v1/nfe/${chave}/cancelamento`, chaveApi, {
+      justificativa: "Pedido cancelado pelo cliente",
+    });
+    expect(await canc.json()).toMatchObject({ situacao: "cancelada" });
+  });
+});
+
 describe("webhooks e rotinas de fundo", () => {
   let segredo = "";
   const tipos = () => recebidos.map((r) => JSON.parse(r.corpo).tipo as string);

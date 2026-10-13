@@ -5,6 +5,7 @@ import {
   resolverPendenteNfce,
   transmitirOfflineNfce,
 } from "./servicos/nfce";
+import { MODELO_NFE, resolverPendenteNfe } from "./servicos/nfe";
 import { MODELO_NFSE, resolverPendenteNfse } from "./servicos/nfse";
 
 export interface ResumoRotinas {
@@ -56,9 +57,11 @@ export async function executarRotinas(
       }
       for (const [modelo, resolver] of [
         [MODELO_NFCE, resolverPendenteNfce],
+        [MODELO_NFE, resolverPendenteNfe],
         [MODELO_NFSE, resolverPendenteNfse],
       ] as const) {
-        if (modelo === MODELO_NFCE ? !empresa.nfce : !empresa.nfse) continue;
+        const configurado = { "65": empresa.nfce, "55": empresa.nfe, nfse: empresa.nfse }[modelo];
+        if (!configurado) continue;
         const ids = await registros.listarEmAberto(
           empresa.id,
           modelo,

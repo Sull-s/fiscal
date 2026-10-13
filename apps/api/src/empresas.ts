@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import type { ArmazemArquivos } from "@fiscal/armazenamento";
 import { ErroFiscal } from "@fiscal/core";
 import type { EmitenteNfce } from "@fiscal/nfce";
+import type { EmitenteNfe } from "@fiscal/nfe";
 import type { Prestador } from "@fiscal/nfse-nacional";
 import { hashToken, hashesIguais } from "./cofre";
 
@@ -23,6 +24,7 @@ export interface Empresa {
     contingenciaOffline?: boolean;
   };
   nfse?: { prestador: Prestador; serie: string; versaoAplicativo?: string };
+  nfe?: { emitente: EmitenteNfe; serie: string; versaoAplicativo?: string };
   certificado?: {
     /** .pfx cifrado pelo cofre */
     pfx: string;

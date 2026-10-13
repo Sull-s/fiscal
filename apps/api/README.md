@@ -45,11 +45,15 @@ curl -X POST localhost:8787/v1/admin/empresas/rose/chaves -H "Authorization: Bea
 | `GET /v1/nfce/{chave}/xml` | XML (nfeProc) |
 | `GET /v1/nfce/{chave}/danfe?formato=escpos\|html\|texto&papel=80\|58&via=consumidor\|estabelecimento` | Cupom |
 | `POST /v1/nfce/{chave}/cancelamento` | `{ justificativa }` |
+| `POST /v1/nfe` | Emite NF-e. `{ operacao: { destinatario, itens (com tributacao), pagamentos, transporte?, cobranca? }, nota: { naturezaOperacao, finalidade?, referencias? }, referencia? }` |
+| `GET /v1/nfe/{chave}` · `/xml` · `/danfe` | Situação (resolve pendente), XML e DANFE A4 em PDF |
+| `POST /v1/nfe/{chave}/cancelamento` | `{ justificativa }` |
+| `POST /v1/nfe/{chave}/carta-correcao` | `{ correcao }` (texto completo; a API numera as cartas) |
 | `POST /v1/nfse` | Emite. `{ tomador?, servico, valores, competencia?, referencia? }` |
 | `GET /v1/nfse/{chave ou Id da DPS}` | Situação; se pendente, pergunta ao Sistema Nacional |
 | `GET /v1/nfse/{id}/xml` · `/danfse` | XML e PDF |
 | `POST /v1/nfse/{id}/cancelamento` | `{ motivo, codigoMotivo? }` |
-| `GET /v1/numeracao/{65\|nfse}` | Próximo número, pendentes, liberados, lacunas |
+| `GET /v1/numeracao/{55\|65\|nfse}` | Próximo número, pendentes, liberados, lacunas |
 | `GET /v1/arquivos/{AAAA}/{MM}` | ZIP do mês para o contador (`?ambiente=2`, `?pdf=1`) |
 
 ## Webhooks

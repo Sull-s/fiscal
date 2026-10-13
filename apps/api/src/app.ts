@@ -7,6 +7,7 @@ import { autenticarChaveApi, empresaPublica } from "./empresas";
 import { type Ambiente, falhar, lerCorpo, responderErro } from "./http";
 import { rotasAdmin } from "./rotas/admin";
 import { rotasNfce } from "./rotas/nfce";
+import { rotasNfe } from "./rotas/nfe";
 import { rotasNfse } from "./rotas/nfse";
 import { executarRotinas } from "./rotinas";
 import { gerarSegredoWebhook, validarUrlWebhook } from "./webhooks";
@@ -81,7 +82,8 @@ function montarApp(deps: DependenciasApi, ctx: ReturnType<typeof criarContexto>)
     const empresa = c.get("empresa");
     const uf =
       empresa.nfce?.emitente.endereco.uf ??
-      falhar(409, "NFCE_NAO_CONFIGURADA", "Cadastre os dados de NFC-e para saber a UF.");
+      empresa.nfe?.emitente.endereco.uf ??
+      falhar(409, "NFCE_NAO_CONFIGURADA", "Cadastre os dados de NFC-e ou NF-e para saber a UF.");
     const modelo = c.req.query("modelo") === "55" ? "55" : "65";
     return c.json(
       await ctx.sefaz(empresa).consultarStatus({ uf, modelo, ambiente: empresa.ambiente }),
@@ -92,10 +94,13 @@ function montarApp(deps: DependenciasApi, ctx: ReturnType<typeof criarContexto>)
   app.get("/v1/numeracao/:modelo", async (c) => {
     const empresa = c.get("empresa");
     const modelo = c.req.param("modelo");
-    const serie =
-      modelo === "65" ? empresa.nfce?.serie : modelo === "nfse" ? empresa.nfse?.serie : undefined;
+    const serie = {
+      "55": empresa.nfe?.serie,
+      "65": empresa.nfce?.serie,
+      nfse: empresa.nfse?.serie,
+    }[modelo];
     if (!serie)
-      falhar(404, "SERIE_NAO_CONFIGURADA", "Modelo sem série configurada (use 65 ou nfse).");
+      falhar(404, "SERIE_NAO_CONFIGURADA", "Modelo sem série configurada (use 55, 65 ou nfse).");
     return c.json(
       await ctx.numeracao.situacao({
         empresa: empresa.id,
@@ -179,6 +184,7 @@ function montarApp(deps: DependenciasApi, ctx: ReturnType<typeof criarContexto>)
     return c.json(await ctx.webhooks.listar(c.get("empresa").id, dia));
   });
 
+  app.route("/v1/nfe", rotasNfe());
   app.route("/v1/nfce", rotasNfce());
   app.route("/v1/nfse", rotasNfse());
 

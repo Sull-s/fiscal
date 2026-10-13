@@ -47,7 +47,11 @@ export function criarContexto(deps: DependenciasApi) {
   // Toda mudança de situação de nota vira evento: "nfce.autorizada", "nfse.cancelada"…
   const registros = criarRegistros(deps.arquivos, {
     aoMudarSituacao: async (empresa, r) => {
-      await webhooks.publicar(empresa, `${r.modelo === "65" ? "nfce" : "nfse"}.${r.situacao}`, r);
+      await webhooks.publicar(
+        empresa,
+        `${{ "55": "nfe", "65": "nfce", nfse: "nfse" }[r.modelo]}.${r.situacao}`,
+        r,
+      );
     },
   });
 
