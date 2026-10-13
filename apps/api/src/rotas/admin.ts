@@ -28,7 +28,7 @@ export function rotasAdmin(ctx: Contexto) {
     const id = validarIdEmpresa(c.req.param("id"));
     const corpo =
       await lerCorpo<
-        Partial<Pick<Empresa, "nome" | "cnpj" | "ambiente" | "nfce" | "nfse" | "nfe">>
+        Partial<Pick<Empresa, "nome" | "cnpj" | "ambiente" | "nfce" | "nfse" | "nfe" | "dfe">>
       >(c);
     const atual = await empresas.obter(id);
     const agora = new Date().toISOString();
@@ -40,6 +40,7 @@ export function rotasAdmin(ctx: Contexto) {
       ...((corpo.nfce ?? atual?.nfce) ? { nfce: corpo.nfce ?? atual?.nfce } : {}),
       ...((corpo.nfse ?? atual?.nfse) ? { nfse: corpo.nfse ?? atual?.nfse } : {}),
       ...((corpo.nfe ?? atual?.nfe) ? { nfe: corpo.nfe ?? atual?.nfe } : {}),
+      ...((corpo.dfe ?? atual?.dfe) ? { dfe: corpo.dfe ?? atual?.dfe } : {}),
       ...(atual?.certificado ? { certificado: atual.certificado } : {}),
       chavesApi: atual?.chavesApi ?? [],
       ...(atual?.webhook ? { webhook: atual.webhook } : {}),

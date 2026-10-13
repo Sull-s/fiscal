@@ -1,0 +1,38 @@
+{
+  "name": "@fiscal/dfe",
+  "version": "0.1.0",
+  "description": "Notas emitidas contra o CNPJ (distribuição DF-e) e manifestação do destinatário",
+  "license": "UNLICENSED",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    }
+  },
+  "files": ["dist"],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@fiscal/core": "workspace:^",
+    "@fiscal/nfe-comum": "workspace:^",
+    "@fiscal/transporte": "workspace:^",
+    "@fiscal/xml": "workspace:^"
+  },
+  "devDependencies": {
+    "@fiscal/certificado": "workspace:^"
+  }
+}

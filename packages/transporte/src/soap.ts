@@ -1,9 +1,16 @@
 import { ErroFiscal } from "@fiscal/core";
 import { XMLParser } from "fast-xml-parser";
 
-/** Envelope SOAP 1.2 da NF-e 4.00: a mensagem vai dentro de <nfeDadosMsg>, sem cabeçalho. */
-export function montarEnvelope(namespace: string, mensagem: string): string {
-  return `<?xml version="1.0" encoding="utf-8"?><soap12:Envelope xmlns:soap12="http://www.w3.org/2003/05/soap-envelope"><soap12:Body><nfeDadosMsg xmlns="${namespace}">${mensagem}</nfeDadosMsg></soap12:Body></soap12:Envelope>`;
+/**
+ * Envelope SOAP 1.2 da NF-e 4.00: a mensagem vai dentro de <nfeDadosMsg>, sem cabeçalho.
+ * Com `operacao` (ex.: "nfeDistDFeInteresse"), o nfeDadosMsg vai dentro do elemento da operação,
+ * como pede o webservice de distribuição do Ambiente Nacional.
+ */
+export function montarEnvelope(namespace: string, mensagem: string, operacao?: string): string {
+  const corpo = operacao
+    ? `<${operacao} xmlns="${namespace}"><nfeDadosMsg>${mensagem}</nfeDadosMsg></${operacao}>`
+    : `<nfeDadosMsg xmlns="${namespace}">${mensagem}</nfeDadosMsg>`;
+  return `<?xml version="1.0" encoding="utf-8"?><soap12:Envelope xmlns:soap12="http://www.w3.org/2003/05/soap-envelope"><soap12:Body>${corpo}</soap12:Body></soap12:Envelope>`;
 }
 
 const leitor = new XMLParser({
@@ -27,7 +34,9 @@ export interface RetornoSoap {
   dados: Record<string, unknown>;
 }
 
-const RE_RESULTADO = /<(?:[\w-]+:)?nfeResultMsg\b[^>]*>([\s\S]*?)<\/(?:[\w-]+:)?nfeResultMsg>/;
+/** Conteúdo do elemento de retorno (nfeResultMsg, ou `<operação>Result` na distribuição). */
+const reResultado = (elemento: string) =>
+  new RegExp(`<(?:[\\w-]+:)?${elemento}\\b[^>]*>([\\s\\S]*?)<\\/(?:[\\w-]+:)?${elemento}>`);
 const RE_FAULT = /<(?:[\w-]+:)?Fault\b[\s\S]*?<\/(?:[\w-]+:)?Fault>/;
 const RE_MOTIVO =
   /<(?:[\w-]+:)?(?:Text|faultstring)\b[^>]*>([\s\S]*?)<\/(?:[\w-]+:)?(?:Text|faultstring)>/;
@@ -37,7 +46,11 @@ const RE_MOTIVO =
  * Os erros trazem `detalhes.podeTerSidoProcessado`: se true, NÃO dá para saber se a SEFAZ
  * processou o pedido (ex.: autorização) e é preciso consultar antes de tentar de novo.
  */
-export function lerRespostaSoap(corpo: string, statusHttp: number): RetornoSoap {
+export function lerRespostaSoap(
+  corpo: string,
+  statusHttp: number,
+  elementoResultado = "nfeResultMsg",
+): RetornoSoap {
   const fault = RE_FAULT.exec(corpo);
   if (fault) {
     const motivo = RE_MOTIVO.exec(fault[0])?.[1]?.trim() ?? "";
@@ -48,7 +61,7 @@ export function lerRespostaSoap(corpo: string, statusHttp: number): RetornoSoap 
     );
   }
 
-  const resultado = RE_RESULTADO.exec(corpo);
+  const resultado = reResultado(elementoResultado).exec(corpo);
   if (!resultado) {
     if (statusHttp !== 200) {
       throw new ErroFiscal(
@@ -58,7 +71,7 @@ export function lerRespostaSoap(corpo: string, statusHttp: number): RetornoSoap 
         { statusHttp, inicio: corpo.slice(0, 300), podeTerSidoProcessado: statusHttp >= 500 },
       );
     }
-    throw new ErroFiscal("SEFAZ_RESPOSTA_INVALIDA", "Resposta da SEFAZ sem nfeResultMsg.", {
+    throw new ErroFiscal("SEFAZ_RESPOSTA_INVALIDA", `Resposta da SEFAZ sem ${elementoResultado}.`, {
       statusHttp,
       inicio: corpo.slice(0, 300),
       podeTerSidoProcessado: true,

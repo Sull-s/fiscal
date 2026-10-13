@@ -59,6 +59,10 @@ export interface ChamadaPorUrl {
   mensagem: string;
   /** Usado para decidir se repetir é seguro; sem ele, só repete falhas de conexão */
   servico?: ServicoSefaz;
+  /** Elemento da operação que embrulha o nfeDadosMsg (o retorno vem em `<operacao>Result`) */
+  operacao?: string;
+  /** Consulta pura: pode repetir mesmo se a SEFAZ talvez tenha recebido */
+  idempotente?: boolean;
 }
 
 export interface StatusServico {
@@ -111,7 +115,7 @@ export function criarClienteSefaz(opcoes: OpcoesCliente): ClienteSefaz {
     });
 
   async function chamarUrl(chamada: ChamadaPorUrl): Promise<RespostaSefaz> {
-    const envelope = montarEnvelope(chamada.namespace, chamada.mensagem);
+    const envelope = montarEnvelope(chamada.namespace, chamada.mensagem, chamada.operacao);
     let ultimoErro: unknown;
 
     for (let tentativa = 1; tentativa <= tentativas; tentativa++) {
@@ -128,7 +132,11 @@ export function criarClienteSefaz(opcoes: OpcoesCliente): ClienteSefaz {
         registro.statusHttp = statusHttp;
         registro.resposta = corpo;
         registro.duracaoMs = Date.now() - inicio;
-        const retorno = lerRespostaSoap(corpo, statusHttp);
+        const retorno = lerRespostaSoap(
+          corpo,
+          statusHttp,
+          chamada.operacao ? `${chamada.operacao}Result` : undefined,
+        );
         opcoes.aoRegistrar?.(registro);
         return { ...retorno, url: chamada.url, statusHttp, duracaoMs: registro.duracaoMs };
       } catch (e) {
@@ -143,7 +151,9 @@ export function criarClienteSefaz(opcoes: OpcoesCliente): ClienteSefaz {
         const repetivel =
           e instanceof ErroFiscal &&
           e.codigo !== "SEFAZ_FAULT" &&
-          (!podeTerSidoProcessado(e) || (chamada.servico && IDEMPOTENTES.has(chamada.servico)));
+          (!podeTerSidoProcessado(e) ||
+            chamada.idempotente ||
+            (chamada.servico && IDEMPOTENTES.has(chamada.servico)));
         if (!repetivel || tentativa === tentativas) break;
         await esperar(espera * 2 ** (tentativa - 1));
       }

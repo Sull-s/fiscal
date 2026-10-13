@@ -16,6 +16,7 @@
     "@fiscal/armazenamento": "workspace:^",
     "@fiscal/certificado": "workspace:^",
     "@fiscal/core": "workspace:^",
+    "@fiscal/dfe": "workspace:^",
     "@fiscal/documentos": "workspace:^",
     "@fiscal/nfce": "workspace:^",
     "@fiscal/nfe": "workspace:^",

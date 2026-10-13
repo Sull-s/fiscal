@@ -5,6 +5,8 @@ import { NS_NFE } from "./constantes";
 import { montarCancelamento, montarCartaCorrecao, montarInutilizacao } from "./eventos";
 
 type Campos = Record<string, string | undefined>;
+const NS_WSDL_EVENTO = "http://www.portalfiscal.inf.br/nfe/wsdl/NFeRecepcaoEvento4";
+
 /** 55 = NF-e, 65 = NFC-e */
 export type ModeloNfe = "55" | "65";
 
@@ -265,6 +267,11 @@ export async function enviarEvento(
     certificado: MaterialAssinatura;
     /** Evento de nota autorizada na SVC, enquanto a contingência está ativa */
     contingencia?: Contingencia;
+    /**
+     * Endereço fixo do RecepcaoEvento (ex.: Ambiente Nacional, para a manifestação do
+     * destinatário), em vez do autorizador da UF.
+     */
+    url?: string;
   },
 ): Promise<ResultadoEvento> {
   const evento = assinarXml(pedido.xmlEvento, {
@@ -273,14 +280,22 @@ export async function enviarEvento(
     perfil: "sefaz",
   });
   const mensagem = `<envEvento xmlns="${NS_NFE}" versao="1.00"><idLote>${gerarIdLote()}</idLote>${evento}</envEvento>`;
-  const r = await cliente.chamar({
-    uf: pedido.uf,
-    modelo: pedido.modelo,
-    ambiente: pedido.ambiente,
-    servico: "evento",
-    mensagem,
-    ...(pedido.contingencia ? { contingencia: pedido.contingencia } : {}),
-  });
+  const r = pedido.url
+    ? await cliente.chamarUrl({
+        url: pedido.url,
+        namespace: NS_WSDL_EVENTO,
+        acao: `${NS_WSDL_EVENTO}/nfeRecepcaoEvento`,
+        mensagem,
+        servico: "evento",
+      })
+    : await cliente.chamar({
+        uf: pedido.uf,
+        modelo: pedido.modelo,
+        ambiente: pedido.ambiente,
+        servico: "evento",
+        mensagem,
+        ...(pedido.contingencia ? { contingencia: pedido.contingencia } : {}),
+      });
   const ret = (r.dados.retEnvEvento ?? {}) as Campos & { retEvento?: { infEvento?: Campos } };
   const inf = ret.retEvento?.infEvento;
   const cStat = inf?.cStat ?? ret.cStat ?? "";

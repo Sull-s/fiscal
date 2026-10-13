@@ -44,6 +44,9 @@ importers:
       '@fiscal/core':
         specifier: workspace:^
         version: link:../../packages/core
+      '@fiscal/dfe':
+        specifier: workspace:^
+        version: link:../../packages/dfe
       '@fiscal/documentos':
         specifier: workspace:^
         version: link:../../packages/documentos
@@ -102,6 +105,25 @@ importers:
         version: 1.3.14
 
   packages/core: {}
+
+  packages/dfe:
+    dependencies:
+      '@fiscal/core':
+        specifier: workspace:^
+        version: link:../core
+      '@fiscal/nfe-comum':
+        specifier: workspace:^
+        version: link:../nfe-comum
+      '@fiscal/transporte':
+        specifier: workspace:^
+        version: link:../transporte
+      '@fiscal/xml':
+        specifier: workspace:^
+        version: link:../xml
+    devDependencies:
+      '@fiscal/certificado':
+        specifier: workspace:^
+        version: link:../certificado
 
   packages/documentos:
     dependencies:

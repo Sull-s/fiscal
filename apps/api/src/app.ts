@@ -6,6 +6,7 @@ import { type DependenciasApi, criarContexto } from "./contexto";
 import { autenticarChaveApi, empresaPublica } from "./empresas";
 import { type Ambiente, falhar, lerCorpo, responderErro } from "./http";
 import { rotasAdmin } from "./rotas/admin";
+import { rotasDfe } from "./rotas/dfe";
 import { rotasNfce } from "./rotas/nfce";
 import { rotasNfe } from "./rotas/nfe";
 import { rotasNfse } from "./rotas/nfse";
@@ -185,6 +186,7 @@ function montarApp(deps: DependenciasApi, ctx: ReturnType<typeof criarContexto>)
   });
 
   app.route("/v1/nfe", rotasNfe());
+  app.route("/v1/dfe", rotasDfe());
   app.route("/v1/nfce", rotasNfce());
   app.route("/v1/nfse", rotasNfse());
 

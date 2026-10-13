@@ -31,6 +31,12 @@ export interface Empresa {
     /** SEFAZ do estado fora do ar: emite pela SEFAZ virtual de contingência (SVC) em vez de falhar */
     contingenciaSvc?: boolean;
   };
+  /** Baixar as notas emitidas contra o CNPJ (distribuição DF-e) de hora em hora */
+  dfe?: {
+    ativo: boolean;
+    /** Manifesta "ciência" de cada nota nova, para o XML completo ser liberado */
+    cienciaAutomatica?: boolean;
+  };
   certificado?: {
     /** .pfx cifrado pelo cofre */
     pfx: string;

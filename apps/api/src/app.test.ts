@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { gzipSync } from "node:zlib";
 import { armazemArquivosEmMemoria } from "@fiscal/armazenamento";
-import { ErroFiscal } from "@fiscal/core";
+import { ErroFiscal, montarChaveAcesso } from "@fiscal/core";
 import { criarClienteNfse } from "@fiscal/nfse-nacional";
 import { armazemEmMemoria } from "@fiscal/numeracao";
 import { type ClienteSefaz, lerXmlComoObjeto } from "@fiscal/transporte";
@@ -24,6 +24,9 @@ const NS = 'xmlns="http://www.portalfiscal.inf.br/nfe"';
 let proximaAutorizacao: "100" | "778" | "sem-resposta" | "sem-conexao" = "100";
 const chamadasSefaz: string[] = [];
 const eventosEnviados: string[] = [];
+const chamadasAn: string[] = [];
+/** Documentos que a distribuição DF-e simulada entrega, um por NSU: [schema, xml] */
+const distribuicao: [string, string][] = [];
 const chaveDe = (xml: string) =>
   /Id="NFe(\d{44})"|<chNFe>(\d{44})<\/chNFe>/.exec(xml)?.slice(1).find(Boolean) ?? "";
 const prot = (chave: string, cStat: string, xMotivo: string, nProt = "143260000000001") =>
@@ -68,7 +71,23 @@ const sefazFalsa: ClienteSefaz = {
       duracaoMs: 1,
     };
   },
-  chamarUrl: () => Promise.reject(new Error("não usado")),
+  // Ambiente Nacional: distribuição DF-e e manifestação
+  async chamarUrl({ url, mensagem }) {
+    chamadasAn.push(url);
+    let xml: string;
+    if (url.includes("NFeDistribuicaoDFe")) {
+      const ult = /<ultNSU>(\d+)<\/ultNSU>/.exec(mensagem)?.[1] ?? "0";
+      const doc = distribuicao[Number(ult)];
+      xml = doc
+        ? `<retDistDFeInt ${NS} versao="1.01"><tpAmb>2</tpAmb><cStat>138</cStat><xMotivo>Documento localizado</xMotivo><ultNSU>${String(Number(ult) + 1).padStart(15, "0")}</ultNSU><maxNSU>${String(distribuicao.length).padStart(15, "0")}</maxNSU><loteDistDFeInt><docZip NSU="${String(Number(ult) + 1).padStart(15, "0")}" schema="${doc[0]}">${gzipSync(doc[1]).toString("base64")}</docZip></loteDistDFeInt></retDistDFeInt>`
+        : `<retDistDFeInt ${NS} versao="1.01"><tpAmb>2</tpAmb><cStat>137</cStat><xMotivo>Nenhum documento localizado</xMotivo><ultNSU>${ult}</ultNSU><maxNSU>${ult}</maxNSU></retDistDFeInt>`;
+    } else {
+      eventosEnviados.push(mensagem);
+      const tp = /<tpEvento>(\d+)<\/tpEvento>/.exec(mensagem)?.[1];
+      xml = `<retEnvEvento ${NS} versao="1.00"><cStat>128</cStat><xMotivo>Lote processado</xMotivo><retEvento versao="1.00"><infEvento><tpAmb>2</tpAmb><verAplic>AN</verAplic><cOrgao>91</cOrgao><cStat>135</cStat><xMotivo>Evento registrado e vinculado a NF-e</xMotivo><tpEvento>${tp}</tpEvento><nProt>891260000000001</nProt></infEvento></retEvento></retEnvEvento>`;
+    }
+    return { xmlRetorno: xml, dados: lerXmlComoObjeto(xml), url, statusHttp: 200, duracaoMs: 1 };
+  },
   async consultarStatus(p) {
     const r = await sefazFalsa.chamar({ ...p, servico: "status", mensagem: "" });
     const s = (r.dados.retConsStatServ ?? {}) as Record<string, string>;
@@ -689,6 +708,75 @@ describe("webhooks e rotinas de fundo", () => {
     expect(entregas.find((e) => e.id === (r as { id: string }).id)).toMatchObject({
       situacao: "entregue",
       tentativas: 2,
+    });
+  });
+});
+
+describe("DF-e: notas de fornecedores", () => {
+  const chave = montarChaveAcesso({
+    uf: "SP",
+    anoMes: "2610",
+    documentoEmitente: "11222333000181",
+    modelo: "55",
+    serie: 1,
+    numero: 9876,
+    tipoEmissao: 1,
+    codigoNumerico: "11223344",
+  });
+  const daquiA = (ms: number) => new Date(Date.now() + ms);
+
+  it("baixa o resumo, manifesta ciência sozinha e avisa por webhook", async () => {
+    await req("PUT", "/v1/admin/empresas/rose", ADMIN, {
+      dfe: { ativo: true, cienciaAutomatica: true },
+    });
+    distribuicao.push([
+      "resNFe_v1.01.xsd",
+      `<resNFe ${NS} versao="1.01"><chNFe>${chave}</chNFe><CNPJ>11222333000181</CNPJ><xNome>Fornecedor SP Ltda</xNome><IE>111</IE><dhEmi>2026-10-10T10:00:00-03:00</dhEmi><tpNF>1</tpNF><vNF>1500.00</vNF><digVal>a</digVal><dhRecbto>2026-10-10T10:00:05-03:00</dhRecbto><nProt>135260000000001</nProt><cSitNFe>1</cSitNFe></resNFe>`,
+    ]);
+    const r = await executarRotinas();
+    expect(r.dfeNovos).toBe(1);
+    await ctx.webhooks.aguardar();
+    expect(recebidos.map((x) => JSON.parse(x.corpo).tipo)).toContain("dfe.nota");
+    expect(eventosEnviados.at(-1)).toContain("<tpEvento>210210</tpEvento>");
+    const notas = (await (await req("GET", "/v1/dfe/notas", chaveApi)).json()) as unknown[];
+    expect(notas).toEqual([
+      expect.objectContaining({
+        chave,
+        valor: 1500,
+        xmlCompleto: false,
+        emitente: expect.objectContaining({ nome: "Fornecedor SP Ltda" }),
+        manifestacao: expect.objectContaining({ tipo: "ciencia" }),
+      }),
+    ]);
+    expect((await req("GET", `/v1/dfe/notas/${chave}/xml`, chaveApi)).status).toBe(404);
+  });
+
+  it("respeita 1 hora de espera e depois baixa o XML completo", async () => {
+    distribuicao.push([
+      "procNFe_v4.00.xsd",
+      `<nfeProc ${NS} versao="4.00"><NFe><infNFe Id="NFe${chave}" versao="4.00"><ide><dhEmi>2026-10-10T10:00:00-03:00</dhEmi></ide><emit><CNPJ>11222333000181</CNPJ><xNome>Fornecedor SP Ltda</xNome></emit><total><ICMSTot><vNF>1500.00</vNF></ICMSTot></total></infNFe></NFe></nfeProc>`,
+    ]);
+    const antes = chamadasAn.filter((u) => u.includes("Distribuicao")).length;
+    await executarRotinas();
+    expect(chamadasAn.filter((u) => u.includes("Distribuicao")).length).toBe(antes);
+    expect((await executarRotinas({ agora: daquiA(61 * 60_000) })).dfeNovos).toBe(1);
+    expect(await (await req("GET", `/v1/dfe/notas/${chave}/xml`, chaveApi)).text()).toMatch(
+      /^<nfeProc /,
+    );
+  });
+
+  it("manifestação pela rota: confirmação; tipo inválido é recusado", async () => {
+    const ok = await req("POST", `/v1/dfe/notas/${chave}/manifestacao`, chaveApi, {
+      tipo: "confirmacao",
+    });
+    expect(await ok.json()).toMatchObject({ registrado: true, protocolo: "891260000000001" });
+    expect(eventosEnviados.at(-1)).toContain("<tpEvento>210200</tpEvento>");
+    expect(
+      (await req("POST", `/v1/dfe/notas/${chave}/manifestacao`, chaveApi, { tipo: "talvez" }))
+        .status,
+    ).toBe(400);
+    expect(await (await req("GET", `/v1/dfe/notas/${chave}`, chaveApi)).json()).toMatchObject({
+      manifestacao: { tipo: "confirmacao" },
     });
   });
 });

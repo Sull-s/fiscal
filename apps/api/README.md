@@ -56,6 +56,20 @@ curl -X POST localhost:8787/v1/admin/empresas/rose/chaves -H "Authorization: Bea
 | `GET /v1/numeracao/{55\|65\|nfse}` | Próximo número, pendentes, liberados, lacunas |
 | `GET /v1/arquivos/{AAAA}/{MM}` | ZIP do mês para o contador (`?ambiente=2`, `?pdf=1`) |
 
+## Notas de fornecedores (DF-e)
+
+Com `"dfe": { "ativo": true, "cienciaAutomatica": true }` no cadastro, a API baixa de hora em hora
+(regra da Receita) as NF-e emitidas contra o CNPJ da empresa. Com `cienciaAutomatica`, manifesta
+"ciência" de cada nota nova, o que libera o XML completo na sincronização seguinte. Cada nota nova
+gera o webhook `dfe.nota`; cancelamentos e cartas de correção do fornecedor, `dfe.evento`.
+
+| Rota | |
+|---|---|
+| `GET /v1/dfe/notas` · `/v1/dfe/notas/{chave}` | Notas recebidas: emitente, valor, situação, manifestação |
+| `GET /v1/dfe/notas/{chave}/xml` | XML completo (depois da ciência) |
+| `POST /v1/dfe/notas/{chave}/manifestacao` | `{ tipo: "ciencia" \| "confirmacao" \| "desconhecimento" \| "nao-realizada", justificativa? }` |
+| `POST /v1/dfe/sincronizar` | Busca agora (respeita a espera de 1 hora) |
+
 ## Webhooks
 
 A empresa configura uma URL e recebe um `POST` a cada mudança de situação de nota

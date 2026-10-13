@@ -1,4 +1,5 @@
 import type { Contexto } from "./contexto";
+import { sincronizarDfe } from "./servicos/dfe";
 import {
   MODELO_NFCE,
   type Operacao,
@@ -11,6 +12,8 @@ import { MODELO_NFSE, resolverPendenteNfse } from "./servicos/nfse";
 export interface ResumoRotinas {
   transmitidasOffline: number;
   pendentesResolvidas: number;
+  /** Documentos novos baixados da distribuição DF-e */
+  dfeNovos: number;
   webhooks: { entregues: number; pendentes: number };
   erros: { empresa: string; erro: string }[];
 }
@@ -19,7 +22,8 @@ export interface ResumoRotinas {
  * Trabalho de fundo, para rodar de tempos em tempos (o servidor chama a cada minuto):
  *  1. transmite as NFC-e offline (se a SEFAZ voltou);
  *  2. resolve NFC-e e NFS-e pendentes (sem resposta na emissão) consultando pela chave/Id da DPS;
- *  3. reenvia webhooks que falharam.
+ *  3. baixa as notas de fornecedores (DF-e), de hora em hora, nas empresas que ativaram;
+ *  4. reenvia webhooks que falharam.
  * Cada mudança de situação gera webhook. Uma empresa com problema não atrapalha as outras.
  */
 export async function executarRotinas(
@@ -32,6 +36,7 @@ export async function executarRotinas(
   const resumo: ResumoRotinas = {
     transmitidasOffline: 0,
     pendentesResolvidas: 0,
+    dfeNovos: 0,
     webhooks: { entregues: 0, pendentes: 0 },
     erros: [],
   };
@@ -74,6 +79,8 @@ export async function executarRotinas(
           if ((await resolver(op, r)).situacao !== "pendente") resumo.pendentesResolvidas++;
         }
       }
+      // Notas de fornecedores: sincronizarDfe só consulta quando a espera de 1 hora já passou
+      if (empresa.dfe?.ativo) resumo.dfeNovos += (await sincronizarDfe(op, agora)).novos;
     } catch (erro) {
       const mensagem = erro instanceof Error ? erro.message : String(erro);
       resumo.erros.push({ empresa: empresa.id, erro: mensagem });
