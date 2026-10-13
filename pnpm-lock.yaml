@@ -124,6 +124,9 @@ importers:
       '@types/qrcode':
         specifier: ^1.5.6
         version: 1.5.6
+      jsbarcode:
+        specifier: 3.11.6
+        version: 3.11.6
 
   packages/nfce:
     dependencies:
@@ -1396,6 +1399,9 @@ packages:
   js-yaml@4.3.2:
     resolution: {integrity: sha512-SFNOvSJ+Dgf/9An904Yx+CgSlIPCkIpao4qo51lpee25TIRejdH3rhR4EZMGoNx3/TP3O+wzWuiTFl4sqbltzA==}
     hasBin: true
+
+  jsbarcode@3.11.6:
+    resolution: {integrity: sha512-G5TKGyKY1zJo0ZQKFM1IIMfy0nF2rs92BLlCz+cU4/TazIc4ZH+X1GYeDRt7TKjrYqmPfTjwTBkU/QnQlsYiuA==}
 
   jsonfile@4.0.0:
     resolution: {integrity: sha512-m6F1R3z8jjlf2imQHS2Qez5sjKWQzbuuhuJ/FKYFRZvPE3PuHcSMVZzfsLhGVOkfd20obL5SWEBew5ShlquNxg==}
@@ -2875,6 +2881,8 @@ snapshots:
   js-yaml@4.3.2:
     dependencies:
       argparse: 2.0.1
+
+  jsbarcode@3.11.6: {}
 
   jsonfile@4.0.0:
     optionalDependencies:
