@@ -64,6 +64,7 @@ inutilização gerados pelo emissor em produção, e o pacote novo gera XML idê
 ```bash
 node scripts/atualizar-catalogo-sefaz.mjs   # baixa endereços oficiais da SEFAZ (fonte: sped-nfe) e regenera os catálogos
 node scripts/homologacao-nfce.mjs emitente.json   # teste REAL em homologação (veja o topo do arquivo)
+node scripts/homologacao-nfe.mjs emitente.json    # o mesmo para a NF-e 55 (inclui carta de correção)
 ```
 
 ## Usando em um projeto

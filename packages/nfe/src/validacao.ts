@@ -28,6 +28,28 @@ export function validarNfe(emitente: EmitenteNfe, operacao: OperacaoNfe, nota: D
   if (emitente.inscricaoMunicipal && !emitente.cnae)
     p.push("Inscrição municipal do emitente exige o CNAE.");
 
+  // A SEFAZ exige pelo menos 2 caracteres em nome, logradouro, bairro e município
+  const curtos = (quem: string, campos: Record<string, string | undefined>) => {
+    for (const [nome, valor] of Object.entries(campos)) {
+      const v = (valor ?? "").trim();
+      if (v.length === 1) p.push(`${quem}: ${nome} precisa de pelo menos 2 caracteres.`);
+    }
+  };
+  const ee = emitente.endereco;
+  curtos("Emitente", {
+    nome: emitente.razaoSocial,
+    logradouro: ee?.logradouro,
+    bairro: ee?.bairro,
+    município: ee?.municipio,
+  });
+  const de = operacao.destinatario?.endereco;
+  curtos("Destinatário", {
+    nome: operacao.destinatario?.nome,
+    logradouro: de?.logradouro,
+    bairro: de?.bairro,
+    município: de?.municipio,
+  });
+
   // Nota
   if (!(Number.isInteger(nota.serie) && nota.serie >= 0 && nota.serie <= 889))
     p.push("Série da NF-e deve ser de 0 a 889.");

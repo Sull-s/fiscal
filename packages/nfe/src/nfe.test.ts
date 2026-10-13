@@ -283,7 +283,12 @@ describe("montarNfe", () => {
         emitente: emitenteNormal,
         nota: { ...nota, finalidade: 4 },
         operacao: {
-          destinatario: { ...lojaSc, indicadorIe: 9, inscricaoEstadual: undefined as never },
+          destinatario: {
+            ...lojaSc,
+            indicadorIe: 9,
+            inscricaoEstadual: undefined as never,
+            endereco: { ...lojaSc.endereco, bairro: "C" },
+          },
           itens: [
             {
               ...vendaSimples.itens[0]!,
@@ -304,6 +309,7 @@ describe("montarNfe", () => {
           "Item 1 (Cadeira de escritorio): CSOSN é só para o Simples; no regime normal use CST.",
           expect.stringContaining("DIFAL"),
           'Devolução e nota de ajuste usam pagamento "sem-pagamento".',
+          "Destinatário: bairro precisa de pelo menos 2 caracteres.",
         ]),
       );
     }
