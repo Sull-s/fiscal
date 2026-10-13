@@ -15,6 +15,7 @@ coverage/
 
 # Exceção: certificados de TESTE (autoassinados, sem valor fiscal) usados nas fixtures
 !packages/*/testes/fixtures/*.pfx
+!apps/*/testes/certificado-teste.pfx
 
 # Dados locais da API (XMLs, cadastro, numeração)
 apps/api/dados/
