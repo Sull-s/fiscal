@@ -33,6 +33,8 @@ export interface Pagamento {
   autorizacao?: string;
   /** Descrição quando a forma é "outros" */
   descricao?: string;
+  /** Pagamento a prazo (boleto, duplicata). Padrão: à vista */
+  aPrazo?: boolean;
 }
 
 export const CODIGO_FORMA: Record<FormaPagamento, string> = {
@@ -84,7 +86,7 @@ export function montarDetPag(p: Pagamento): string {
     : "";
   return grupo(
     "detPag",
-    tag("indPag", "0"),
+    tag("indPag", p.aPrazo ? "1" : "0"),
     tag("tPag", tPag),
     tPag === "99" && texto("xPag", p.descricao || "Outros", 60),
     tag("vPag", formatarDecimal(reais(centavos(p.valor)), 2)),
