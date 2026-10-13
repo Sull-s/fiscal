@@ -1,4 +1,5 @@
 import type { Uf } from "@fiscal/core";
+import type { Pagamento, TributacaoItem } from "@fiscal/nfe-comum";
 
 export interface Endereco {
   logradouro: string;
@@ -21,10 +22,10 @@ export interface EmitenteNfce {
   razaoSocial: string;
   nomeFantasia?: string;
   /**
-   * Regime tributário: 1 Simples Nacional · 2 Simples com excesso de sublimite · 4 MEI.
-   * (3, regime normal, ainda não é suportado por este pacote.)
+   * Regime tributário: 1 Simples Nacional · 2 Simples com excesso de sublimite · 3 regime normal
+   * (Lucro Presumido/Real: cada item precisa de `tributacao` com CST) · 4 MEI.
    */
-  crt: 1 | 2 | 4;
+  crt: 1 | 2 | 3 | 4;
   endereco: Endereco;
   responsavelTecnico?: {
     cnpj: string;
@@ -61,27 +62,14 @@ export interface ItemVenda {
   valorUnitario: number;
   /** Texto livre do item (infAdProd) */
   observacao?: string;
-}
-
-export type FormaPagamento = "dinheiro" | "credito" | "debito" | "pix" | "outros";
-
-export interface Pagamento {
-  forma: FormaPagamento;
-  valor: number;
   /**
-   * Cartão/Pix integrado ao sistema (maquininha conectada): exige o CNPJ da credenciadora.
-   * Padrão: true para crédito, débito e Pix.
+   * Tributação completa do item (obrigatória no regime normal, CRT 3). Quando informada,
+   * substitui `csosn`, `origem` e `cstPisCofins`.
    */
-  integrado?: boolean;
-  /** CNPJ da credenciadora/instituição de pagamento (ex.: Mercado Pago 10573521000191) */
-  cnpjCredenciadora?: string;
-  /** Nome da bandeira: visa, mastercard, elo, amex, hipercard… */
-  bandeira?: string;
-  /** Código de autorização da transação */
-  autorizacao?: string;
-  /** Descrição quando a forma é "outros" */
-  descricao?: string;
+  tributacao?: TributacaoItem;
 }
+
+export type { FormaPagamento, Pagamento } from "@fiscal/nfe-comum";
 
 export interface Destinatario {
   /** CPF ou CNPJ */

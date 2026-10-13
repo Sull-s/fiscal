@@ -4,7 +4,7 @@ export {
   TEXTO_HOMOLOGACAO_ITEM,
   montarNfce,
 } from "./montar";
-export { montarCancelamento, montarInutilizacao } from "./eventos";
+export { montarCancelamento, montarInutilizacao } from "@fiscal/nfe-comum";
 export {
   type ResultadoAutorizacao,
   type ResultadoConsulta,

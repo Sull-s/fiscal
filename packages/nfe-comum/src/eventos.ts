@@ -7,7 +7,7 @@ import {
   validarChaveAcesso,
 } from "@fiscal/core";
 import { limparTexto, somenteDigitos, tag, texto } from "@fiscal/xml";
-import { NS_NFE } from "./montar";
+import { NS_NFE } from "./constantes";
 
 function exigirJustificativa(justificativa: string): string {
   const xJust = limparTexto(justificativa, 255);
@@ -151,6 +151,64 @@ export function montarInutilizacao(dados: {
 
   return {
     xml: `<inutNFe xmlns="${NS_NFE}" versao="4.00"><infInut Id="${id}">${corpo}</infInut></inutNFe>`,
+    id,
+  };
+}
+
+/** Texto fixo exigido pelo leiaute da CC-e (sem acentos, exatamente assim). */
+export const CONDICAO_USO_CCE =
+  "A Carta de Correcao e disciplinada pelo paragrafo 1o-A do art. 7o do Convenio S/N, de 15 de " +
+  "dezembro de 1970 e pode ser utilizada para regularizacao de erro ocorrido na emissao de " +
+  "documento fiscal, desde que o erro nao esteja relacionado com: I - as variaveis que " +
+  "determinam o valor do imposto tais como: base de calculo, aliquota, diferenca de preco, " +
+  "quantidade, valor da operacao ou da prestacao; II - a correcao de dados cadastrais que " +
+  "implique mudanca do remetente ou do destinatario; III - a data de emissao ou de saida.";
+
+/**
+ * Carta de correção eletrônica (110110), só para NF-e modelo 55. Pronta para assinar.
+ * Cada carta nova substitui a anterior (sequência 1, 2, 3… até 20): mande sempre o texto completo.
+ * Não serve para corrigir valores, impostos, quantidade, emitente/destinatário nem datas.
+ */
+export function montarCartaCorrecao(dados: {
+  chave: string;
+  /** O que está sendo corrigido (15 a 1000 caracteres) */
+  correcao: string;
+  documentoEmitente: string;
+  ambiente: 1 | 2;
+  /** 1 na primeira carta; some 1 a cada nova carta da mesma nota */
+  sequencia: number;
+  dataEvento?: Date;
+  fuso?: string;
+}): { xml: string; id: string } {
+  if (!validarChaveAcesso(dados.chave)) {
+    throw new ErroFiscal("CHAVE_INVALIDA", "Chave de acesso inválida.", { chave: dados.chave });
+  }
+  if (dados.chave.slice(20, 22) !== "55") {
+    throw new ErroFiscal("CCE_SO_NFE", "Carta de correção só existe para NF-e (modelo 55).");
+  }
+  if (!(Number.isInteger(dados.sequencia) && dados.sequencia >= 1 && dados.sequencia <= 20)) {
+    throw new ErroFiscal("CCE_SEQUENCIA_INVALIDA", "Sequência da carta de correção: 1 a 20.");
+  }
+  const xCorrecao = limparTexto(dados.correcao, 1000);
+  if (xCorrecao.length < 15) {
+    throw new ErroFiscal(
+      "CCE_CORRECAO_CURTA",
+      "O texto da correção precisa ter pelo menos 15 caracteres.",
+    );
+  }
+  const id = `ID110110${dados.chave}${String(dados.sequencia).padStart(2, "0")}`;
+  const corpo =
+    tag("cOrgao", dados.chave.slice(0, 2)) +
+    tag("tpAmb", dados.ambiente) +
+    documento(dados.documentoEmitente) +
+    tag("chNFe", dados.chave) +
+    tag("dhEvento", formatarDataHoraSefaz(dados.dataEvento ?? new Date(), dados.fuso)) +
+    tag("tpEvento", "110110") +
+    tag("nSeqEvento", dados.sequencia) +
+    tag("verEvento", "1.00") +
+    `<detEvento versao="1.00"><descEvento>Carta de Correcao</descEvento>${texto("xCorrecao", xCorrecao)}${tag("xCondUso", CONDICAO_USO_CCE)}</detEvento>`;
+  return {
+    xml: `<evento xmlns="${NS_NFE}" versao="1.00"><infEvento Id="${id}">${corpo}</infEvento></evento>`,
     id,
   };
 }

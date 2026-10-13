@@ -3,12 +3,12 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { abrirCertificadoA1 } from "@fiscal/certificado";
 import { ErroFiscal, decomporChaveAcesso } from "@fiscal/core";
+import { montarCancelamento } from "@fiscal/nfe-comum";
 import { assinarXml, validarContraXsd, verificarAssinaturas } from "@fiscal/xml";
 import { describe, expect, it } from "vitest";
+import { chaveDe, clienteFalso, protNFe, retEnviNFe } from "../../nfe-comum/testes/sefaz-falsa";
 import { PASTA_FIXTURES, carregarFixturesAntigas } from "../testes/fixtures-antigas";
-import { chaveDe, clienteFalso, protNFe, retEnviNFe } from "../testes/sefaz-falsa";
 import { emitirNfce } from "./emitir";
-import { montarCancelamento } from "./eventos";
 import { montarNfce } from "./montar";
 import { transmitirNfceOffline } from "./sefaz";
 

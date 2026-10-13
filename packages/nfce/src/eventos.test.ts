@@ -1,9 +1,9 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { ErroFiscal } from "@fiscal/core";
+import { montarCancelamento, montarInutilizacao } from "@fiscal/nfe-comum";
 import { describe, expect, it } from "vitest";
 import { PASTA_FIXTURES } from "../testes/fixtures-antigas";
-import { montarCancelamento, montarInutilizacao } from "./eventos";
 
 const antigo = (nome: string) => readFileSync(join(PASTA_FIXTURES, "antigo", nome), "utf8");
 

@@ -1,4 +1,5 @@
 import { ErroFiscal, limparCnpj, validarCnpj, validarCpf } from "@fiscal/core";
+import { problemasTributacao } from "@fiscal/nfe-comum";
 import { somenteDigitos } from "@fiscal/xml";
 import type { EmitenteNfce, Venda } from "./tipos";
 import { URLS_CONSULTA_NFCE } from "./urls-consulta";
@@ -23,8 +24,8 @@ export function validarEmitente(e: EmitenteNfce): void {
     problemas.push("Inscrição estadual inválida: sem IE a empresa não pode emitir NFC-e.");
   }
   if (!e.razaoSocial?.trim()) problemas.push("Razão social não informada.");
-  if (![1, 2, 4].includes(e.crt)) {
-    problemas.push("Regime tributário não suportado: use CRT 1 (Simples), 2 ou 4 (MEI).");
+  if (![1, 2, 3, 4].includes(e.crt)) {
+    problemas.push("Regime tributário inválido: use CRT 1 (Simples), 2, 3 (normal) ou 4 (MEI).");
   }
   const end = e.endereco ?? {};
   if (!end.logradouro?.trim()) problemas.push("Endereço da empresa sem logradouro.");
@@ -42,7 +43,7 @@ export function validarEmitente(e: EmitenteNfce): void {
 }
 
 /** Confere a venda antes de montar; lança ErroFiscal com TODOS os problemas encontrados. */
-export function validarVenda(venda: Venda): void {
+export function validarVenda(venda: Venda, crt: 1 | 2 | 3 | 4 = 1): void {
   const problemas: string[] = [];
   const itens = venda.itens ?? [];
   if (itens.length === 0) problemas.push("A venda não tem itens.");
@@ -56,18 +57,33 @@ export function validarVenda(venda: Venda): void {
     if (!(Number(it.quantidade) > 0))
       problemas.push(`${nome}: quantidade deve ser maior que zero.`);
     if (!(Number(it.valorUnitario) >= 0)) problemas.push(`${nome}: valor unitário inválido.`);
-    const csosn = it.csosn ?? "102";
-    if (!CSOSN_ACEITOS.includes(csosn)) {
-      problemas.push(`${nome}: CSOSN ${csosn} não é aceito (use 102, 103, 300, 400 ou 500).`);
-    }
-    if (it.csosn === "500" && !it.cest) {
-      problemas.push(`${nome}: produto com ST (CSOSN 500) precisa do CEST.`);
-    }
-    const cst = cstPisCofins(it.cstPisCofins);
-    if (cst && ![...CST_PIS_NAO_TRIBUTADO, ...CST_PIS_OUTRAS].includes(cst)) {
+    if (it.tributacao) {
+      for (const p of problemasTributacao(it.tributacao, crt)) problemas.push(`${nome}: ${p}`);
+      const icms = it.tributacao.icms;
+      if (
+        (("csosn" in icms && icms.csosn === "500") || ("cst" in icms && icms.cst === "60")) &&
+        !it.cest
+      ) {
+        problemas.push(`${nome}: produto com ST precisa do CEST.`);
+      }
+    } else if (crt === 3) {
       problemas.push(
-        `${nome}: CST PIS/COFINS ${cst} não é usado pelo Simples (use 04 a 09, 49 ou 99).`,
+        `${nome}: no regime normal (CRT 3) informe a tributacao do item (CST de ICMS).`,
       );
+    } else {
+      const csosn = it.csosn ?? "102";
+      if (!CSOSN_ACEITOS.includes(csosn)) {
+        problemas.push(`${nome}: CSOSN ${csosn} não é aceito (use 102, 103, 300, 400 ou 500).`);
+      }
+      if (it.csosn === "500" && !it.cest) {
+        problemas.push(`${nome}: produto com ST (CSOSN 500) precisa do CEST.`);
+      }
+      const cst = cstPisCofins(it.cstPisCofins);
+      if (cst && ![...CST_PIS_NAO_TRIBUTADO, ...CST_PIS_OUTRAS].includes(cst)) {
+        problemas.push(
+          `${nome}: CST PIS/COFINS ${cst} não é usado pelo Simples (use 04 a 09, 49 ou 99).`,
+        );
+      }
     }
   });
 
@@ -78,6 +94,8 @@ export function validarVenda(venda: Venda): void {
     const eletronico = p.forma === "credito" || p.forma === "debito" || p.forma === "pix";
     if (!(Number(p.valor) > 0))
       problemas.push(`Pagamento ${i + 1}: valor deve ser maior que zero.`);
+    if (p.forma === "sem-pagamento")
+      problemas.push(`Pagamento ${i + 1}: NFC-e não aceita "sem-pagamento" (só NF-e).`);
     if (eletronico && p.integrado !== false && !validarCnpj(p.cnpjCredenciadora ?? "")) {
       problemas.push(
         `Pagamento ${i + 1} (${p.forma}): pagamento integrado precisa do CNPJ da credenciadora (ou informe integrado: false).`,

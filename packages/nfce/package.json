@@ -29,6 +29,7 @@
   "dependencies": {
     "@fiscal/certificado": "workspace:^",
     "@fiscal/core": "workspace:^",
+    "@fiscal/nfe-comum": "workspace:^",
     "@fiscal/transporte": "workspace:^",
     "@fiscal/xml": "workspace:^"
   }

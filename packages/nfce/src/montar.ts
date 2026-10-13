@@ -9,6 +9,17 @@ import {
   montarChaveAcesso,
 } from "@fiscal/core";
 import {
+  NS_NFE,
+  type TributacaoItem,
+  calcularImpostos,
+  centavos,
+  formatarValorUnitario,
+  montarDetPag,
+  reais,
+  repartir,
+  totalDoItemEmCentavos,
+} from "@fiscal/nfe-comum";
+import {
   escaparTexto,
   formatarDecimal,
   grupo,
@@ -17,12 +28,11 @@ import {
   tag,
   texto,
 } from "@fiscal/xml";
-import type { DadosNota, EmitenteNfce, ItemVenda, NfceMontada, Pagamento, Venda } from "./tipos";
+import type { DadosNota, EmitenteNfce, ItemVenda, NfceMontada, Venda } from "./tipos";
 import { URLS_CONSULTA_NFCE } from "./urls-consulta";
-import { CST_PIS_NAO_TRIBUTADO, cstPisCofins, validarEmitente, validarVenda } from "./validacao";
-import { centavos, formatarValorUnitario, reais, repartir, totalDoItemEmCentavos } from "./valores";
+import { cstPisCofins, validarEmitente, validarVenda } from "./validacao";
 
-export const NS_NFE = "http://www.portalfiscal.inf.br/nfe";
+export { NS_NFE };
 
 /** Textos que a SEFAZ exige em homologação (no 1º item e no nome do destinatário). */
 export const TEXTO_HOMOLOGACAO_ITEM =
@@ -30,74 +40,17 @@ export const TEXTO_HOMOLOGACAO_ITEM =
 export const TEXTO_HOMOLOGACAO_DESTINATARIO =
   "NF-E EMITIDA EM AMBIENTE DE HOMOLOGACAO - SEM VALOR FISCAL";
 
-const CODIGO_FORMA: Record<Pagamento["forma"], string> = {
-  dinheiro: "01",
-  credito: "03",
-  debito: "04",
-  pix: "17",
-  outros: "99",
-};
-
-const CODIGO_BANDEIRA: Record<string, string> = {
-  visa: "01",
-  mastercard: "02",
-  master: "02",
-  amex: "03",
-  "american express": "03",
-  sorocred: "04",
-  diners: "05",
-  elo: "06",
-  hipercard: "07",
-  aura: "08",
-  cabal: "09",
-  alelo: "10",
-};
-
 const dec = (c: number) => formatarDecimal(reais(c), 2);
 
-function icms(it: ItemVenda): string {
-  const orig = String(it.origem ?? 0);
-  const csosn = it.csosn ?? "102";
-  if (csosn === "500") {
-    return `<ICMS><ICMSSN500><orig>${orig}</orig><CSOSN>500</CSOSN></ICMSSN500></ICMS>`;
-  }
-  return `<ICMS><ICMSSN102><orig>${orig}</orig><CSOSN>${csosn}</CSOSN></ICMSSN102></ICMS>`;
-}
-
-/** PIS e COFINS do item (opcionais na NFC-e): só vão quando o produto tem o CST preenchido. */
-function pisCofins(it: ItemVenda): string {
+/** Tributação do item: a completa (`tributacao`) ou o atalho do Simples (csosn + cstPisCofins). */
+function tributacaoDoItem(it: ItemVenda): TributacaoItem {
+  if (it.tributacao) return it.tributacao;
   const cst = cstPisCofins(it.cstPisCofins);
-  if (!cst) return "";
-  if (CST_PIS_NAO_TRIBUTADO.includes(cst)) {
-    return `<PIS><PISNT><CST>${cst}</CST></PISNT></PIS><COFINS><COFINSNT><CST>${cst}</CST></COFINSNT></COFINS>`;
-  }
-  const zeros = (imp: string) => `<vBC>0.00</vBC><p${imp}>0.0000</p${imp}><v${imp}>0.00</v${imp}>`;
-  return `<PIS><PISOutr><CST>${cst}</CST>${zeros("PIS")}</PISOutr></PIS><COFINS><COFINSOutr><CST>${cst}</CST>${zeros("COFINS")}</COFINSOutr></COFINS>`;
-}
-
-function pagamento(p: Pagamento): string {
-  const tPag = CODIGO_FORMA[p.forma] ?? "99";
-  const eletronico = tPag === "03" || tPag === "04" || tPag === "17";
-  const integrado = eletronico && p.integrado !== false;
-  const card = eletronico
-    ? grupo(
-        "card",
-        tag("tpIntegra", integrado ? "1" : "2"),
-        integrado && tag("CNPJ", somenteDigitos(p.cnpjCredenciadora)),
-        integrado &&
-          tPag !== "17" &&
-          tag("tBand", CODIGO_BANDEIRA[String(p.bandeira ?? "").toLowerCase()] ?? "99"),
-        integrado && texto("cAut", p.autorizacao, 128),
-      )
-    : "";
-  return grupo(
-    "detPag",
-    tag("indPag", "0"),
-    tag("tPag", tPag),
-    tPag === "99" && texto("xPag", p.descricao || "Outros", 60),
-    tag("vPag", dec(centavos(p.valor))),
-    card,
-  );
+  return {
+    origem: it.origem ?? 0,
+    icms: { csosn: it.csosn ?? "102" },
+    ...(cst ? { pis: { cst }, cofins: { cst } } : {}),
+  };
 }
 
 /**
@@ -163,7 +116,7 @@ export function montarNfce(entrada: {
 }): NfceMontada {
   const { emitente, venda, nota } = entrada;
   validarEmitente(emitente);
-  validarVenda(venda);
+  validarVenda(venda, emitente.crt);
   // Séries 890 a 999 são reservadas (avulsa e contingências antigas)
   if (!(Number.isInteger(nota.serie) && nota.serie >= 0 && nota.serie <= 889)) {
     throw new ErroFiscal("NFCE_SERIE_INVALIDA", "Série da NFC-e deve ser de 0 a 889.", {
@@ -305,8 +258,21 @@ export function montarNfce(entrada: {
       "</dest>"
     : "";
 
+  const totaisImpostos = { vBC: 0, vICMS: 0, vFCP: 0, vPIS: 0, vCOFINS: 0 };
   const det = venda.itens
     .map((it, i) => {
+      const impostos = calcularImpostos(
+        tributacaoDoItem(it),
+        {
+          produto: totaisItens[i] ?? 0,
+          desconto: descontos[i] ?? 0,
+          outras: outrosValores[i] ?? 0,
+        },
+        { consumidorFinal: true },
+      );
+      for (const k of Object.keys(totaisImpostos) as (keyof typeof totaisImpostos)[]) {
+        totaisImpostos[k] += impostos[k];
+      }
       const xProd = homologacao && i === 0 ? TEXTO_HOMOLOGACAO_ITEM : it.descricao;
       const unidade = it.unidade || "UN";
       const qtd = formatarDecimal(it.quantidade, 4);
@@ -331,24 +297,30 @@ export function montarNfce(entrada: {
         ((outrosValores[i] ?? 0) > 0 ? tag("vOutro", dec(outrosValores[i] ?? 0)) : "") +
         tag("indTot", "1") +
         "</prod>";
-      return `<det nItem="${i + 1}">${prod}<imposto>${icms(it)}${pisCofins(it)}</imposto>${texto("infAdProd", it.observacao, 500)}</det>`;
+      return `<det nItem="${i + 1}">${prod}<imposto>${impostos.xml}</imposto>${texto("infAdProd", it.observacao, 500)}</det>`;
     })
     .join("");
 
   const zeros = (...nomes: string[]) => nomes.map((n) => tag(n, "0.00")).join("");
   const total =
     "<total><ICMSTot>" +
-    zeros("vBC", "vICMS", "vICMSDeson", "vFCP", "vBCST", "vST", "vFCPST", "vFCPSTRet") +
+    tag("vBC", dec(totaisImpostos.vBC)) +
+    tag("vICMS", dec(totaisImpostos.vICMS)) +
+    zeros("vICMSDeson") +
+    tag("vFCP", dec(totaisImpostos.vFCP)) +
+    zeros("vBCST", "vST", "vFCPST", "vFCPSTRet") +
     tag("vProd", dec(vProd)) +
     zeros("vFrete", "vSeg") +
     tag("vDesc", dec(desconto)) +
-    zeros("vII", "vIPI", "vIPIDevol", "vPIS", "vCOFINS") +
+    zeros("vII", "vIPI", "vIPIDevol") +
+    tag("vPIS", dec(totaisImpostos.vPIS)) +
+    tag("vCOFINS", dec(totaisImpostos.vCOFINS)) +
     tag("vOutro", dec(outras)) +
     tag("vNF", dec(vNF)) +
     "</ICMSTot></total>";
 
   const transp = "<transp><modFrete>9</modFrete></transp>";
-  const pag = `<pag>${venda.pagamentos.map(pagamento).join("")}${troco > 0 ? tag("vTroco", dec(troco)) : ""}</pag>`;
+  const pag = `<pag>${venda.pagamentos.map(montarDetPag).join("")}${troco > 0 ? tag("vTroco", dec(troco)) : ""}</pag>`;
   const infAdic = grupo("infAdic", texto("infCpl", venda.informacoesComplementares, 5000));
   const rt = emitente.responsavelTecnico;
   const infRespTec = rt

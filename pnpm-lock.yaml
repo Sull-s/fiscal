@@ -133,12 +133,31 @@ importers:
       '@fiscal/core':
         specifier: workspace:^
         version: link:../core
+      '@fiscal/nfe-comum':
+        specifier: workspace:^
+        version: link:../nfe-comum
       '@fiscal/transporte':
         specifier: workspace:^
         version: link:../transporte
       '@fiscal/xml':
         specifier: workspace:^
         version: link:../xml
+
+  packages/nfe-comum:
+    dependencies:
+      '@fiscal/core':
+        specifier: workspace:^
+        version: link:../core
+      '@fiscal/transporte':
+        specifier: workspace:^
+        version: link:../transporte
+      '@fiscal/xml':
+        specifier: workspace:^
+        version: link:../xml
+    devDependencies:
+      '@fiscal/certificado':
+        specifier: workspace:^
+        version: link:../certificado
 
   packages/nfse-nacional:
     dependencies:

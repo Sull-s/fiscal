@@ -4,7 +4,6 @@ import { abrirCertificadoA1 } from "@fiscal/certificado";
 import { ErroFiscal } from "@fiscal/core";
 import { assinarXml, validarContraXsd, verificarAssinaturas } from "@fiscal/xml";
 import { describe, expect, it } from "vitest";
-import { PASTA_FIXTURES, carregarFixturesAntigas } from "../testes/fixtures-antigas";
 import {
   chaveDe,
   clienteFalso,
@@ -12,7 +11,8 @@ import {
   protNFe,
   retConsSitNFe,
   retEnviNFe,
-} from "../testes/sefaz-falsa";
+} from "../../nfe-comum/testes/sefaz-falsa";
+import { PASTA_FIXTURES, carregarFixturesAntigas } from "../testes/fixtures-antigas";
 import { montarNfce } from "./montar";
 import { autorizarNfce, cancelarNfce, consultarNfce, inutilizarNumeracao } from "./sefaz";
 
