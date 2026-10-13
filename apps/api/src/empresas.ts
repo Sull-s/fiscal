@@ -33,13 +33,15 @@ export interface Empresa {
     validoAte: string;
   };
   chavesApi: { id: string; hash: string; criadaEm: string }[];
+  /** Para onde avisar mudanças de situação das notas. `segredo` cifrado pelo cofre */
+  webhook?: { url: string; segredo: string; criadoEm: string };
   criadaEm: string;
   atualizadaEm: string;
 }
 
 /** Visão da empresa sem segredos, para devolver pela API. */
 export function empresaPublica(e: Empresa) {
-  const { certificado, chavesApi, ...resto } = e;
+  const { certificado, chavesApi, webhook, ...resto } = e;
   return {
     ...resto,
     certificado: certificado
@@ -50,6 +52,7 @@ export function empresaPublica(e: Empresa) {
         }
       : null,
     chavesApi: chavesApi.map((c) => ({ id: c.id, criadaEm: c.criadaEm })),
+    webhook: webhook ? { url: webhook.url, criadoEm: webhook.criadoEm } : null,
   };
 }
 

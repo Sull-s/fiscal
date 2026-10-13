@@ -44,16 +44,39 @@ const ler = async <T>(armazem: ArmazemArquivos, caminho: string): Promise<T | nu
   return bytes ? (JSON.parse(new TextDecoder().decode(bytes)) as T) : null;
 };
 
-/** Índice de notas e respostas idempotentes, guardados no mesmo armazém de arquivos. */
-export function criarRegistros(armazem: ArmazemArquivos) {
+/** Situações que ficam numa lista de trabalho (as rotinas da API resolvem sozinhas). */
+const EM_ABERTO = ["pendente", "offline"] as const;
+export type SituacaoEmAberto = (typeof EM_ABERTO)[number];
+const emAberto = (s: SituacaoRegistro | null): s is SituacaoEmAberto =>
+  (EM_ABERTO as readonly string[]).includes(s ?? "");
+
+export interface OpcoesRegistros {
+  /** Chamado quando uma nota é criada ou muda de situação (webhooks) */
+  aoMudarSituacao?: (
+    empresa: string,
+    registro: RegistroNota,
+    anterior: SituacaoRegistro | null,
+  ) => Promise<void> | void;
+}
+
+/**
+ * Índice de notas e respostas idempotentes, guardados no mesmo armazém de arquivos.
+ * Notas "pendente" e "offline" ganham uma marca em `_abertas/`, para as rotinas acharem sem varrer
+ * o índice inteiro.
+ */
+export function criarRegistros(armazem: ArmazemArquivos, opcoes: OpcoesRegistros = {}) {
   const base = (empresa: string, modelo: string, ambiente: number) =>
     `_indice/${empresa}/${modelo}/${ambiente}`;
+  const marcas = (empresa: string, modelo: string, ambiente: number, situacao: string) =>
+    `_abertas/${empresa}/${modelo}/${ambiente}/${situacao}/`;
   const segura = (id: string) => id.replace(/[^0-9A-Za-z_-]/g, "");
 
   return {
     async salvar(empresa: string, registro: RegistroNota) {
       const b = base(empresa, registro.modelo, registro.ambiente);
-      await armazem.gravar(`${b}/${segura(registro.id)}.json`, json(registro), "application/json");
+      const caminho = `${b}/${segura(registro.id)}.json`;
+      const anterior = (await ler<RegistroNota>(armazem, caminho))?.situacao ?? null;
+      await armazem.gravar(caminho, json(registro), "application/json");
       // NFS-e: permite achar pela chave (50 dígitos) além do Id da DPS
       if (registro.chave && registro.chave !== registro.id) {
         await armazem.gravar(
@@ -62,6 +85,16 @@ export function criarRegistros(armazem: ArmazemArquivos) {
           "application/json",
         );
       }
+      if (anterior === registro.situacao) return;
+      const marcar = (situacao: SituacaoEmAberto, aberta: boolean) =>
+        armazem.gravar(
+          marcas(empresa, registro.modelo, registro.ambiente, situacao) + segura(registro.id),
+          json({ aberta }),
+          "application/json",
+        );
+      if (emAberto(anterior)) await marcar(anterior, false);
+      if (emAberto(registro.situacao)) await marcar(registro.situacao, true);
+      await opcoes.aoMudarSituacao?.(empresa, registro, anterior);
     },
     async obter(empresa: string, modelo: "65" | "nfse", ambiente: number, idOuChave: string) {
       const b = base(empresa, modelo, ambiente);
@@ -71,23 +104,25 @@ export function criarRegistros(armazem: ArmazemArquivos) {
       return apelido ? ler<RegistroNota>(armazem, `${b}/${segura(apelido.id)}.json`) : null;
     },
 
-    /** Marca/desmarca NFC-e offline que ainda precisa ser transmitida. */
-    async marcarOffline(empresa: string, ambiente: number, chave: string, pendente: boolean) {
-      const caminho = `_offline/${empresa}/${ambiente}/${segura(chave)}`;
-      await armazem.gravar(caminho, json({ pendente }), "application/json");
-    },
-    /** Chaves das NFC-e offline ainda não transmitidas, das mais antigas para as mais novas. */
-    async listarOffline(empresa: string, ambiente: number) {
-      const prefixo = `_offline/${empresa}/${ambiente}/`;
-      const chaves: string[] = [];
+    /**
+     * Ids das notas ainda "pendente" ou "offline", das mais antigas para as mais novas
+     * (NFC-e: por AAMM, série e número da chave; NFS-e: o Id da DPS já vem em ordem).
+     */
+    async listarEmAberto(
+      empresa: string,
+      modelo: "65" | "nfse",
+      ambiente: number,
+      situacao: SituacaoEmAberto,
+    ) {
+      const prefixo = marcas(empresa, modelo, ambiente, situacao);
+      const ids: string[] = [];
       for (const caminho of await armazem.listar(prefixo)) {
-        const marca = await ler<{ pendente: boolean }>(armazem, caminho);
-        if (marca?.pendente) chaves.push(caminho.slice(prefixo.length));
+        if ((await ler<{ aberta: boolean }>(armazem, caminho))?.aberta) {
+          ids.push(caminho.slice(prefixo.length));
+        }
       }
-      // A chave começa por UF+AAMM e o número vem depois da série: ordena por AAMM, série e número
-      return chaves.sort((a, b) =>
-        (a.slice(2, 6) + a.slice(22, 34)).localeCompare(b.slice(2, 6) + b.slice(22, 34)),
-      );
+      const ordem = (id: string) => (modelo === "65" ? id.slice(2, 6) + id.slice(22, 34) : id);
+      return ids.sort((a, b) => ordem(a).localeCompare(ordem(b)));
     },
 
     /** Resposta guardada para um Idempotency-Key (repetir o pedido devolve a mesma coisa). */

@@ -39,6 +39,7 @@ export function rotasAdmin(ctx: Contexto) {
       ...((corpo.nfse ?? atual?.nfse) ? { nfse: corpo.nfse ?? atual?.nfse } : {}),
       ...(atual?.certificado ? { certificado: atual.certificado } : {}),
       chavesApi: atual?.chavesApi ?? [],
+      ...(atual?.webhook ? { webhook: atual.webhook } : {}),
       criadaEm: atual?.criadaEm ?? agora,
       atualizadaEm: agora,
     } as Empresa;

@@ -4,10 +4,12 @@ import { bearerAuth } from "hono/bearer-auth";
 import { hashToken, hashesIguais } from "./cofre";
 import { type DependenciasApi, criarContexto } from "./contexto";
 import { autenticarChaveApi, empresaPublica } from "./empresas";
-import { type Ambiente, falhar, responderErro } from "./http";
+import { type Ambiente, falhar, lerCorpo, responderErro } from "./http";
 import { rotasAdmin } from "./rotas/admin";
 import { rotasNfce } from "./rotas/nfce";
 import { rotasNfse } from "./rotas/nfse";
+import { executarRotinas } from "./rotinas";
+import { gerarSegredoWebhook, validarUrlWebhook } from "./webhooks";
 
 /**
  * API fiscal multi-empresa.
@@ -16,7 +18,22 @@ import { rotasNfse } from "./rotas/nfse";
  *   /v1/...                        chave de API da empresa (Authorization: Bearer fsk_…)
  */
 export function criarApp(deps: DependenciasApi) {
+  return criarServico(deps).app;
+}
+
+/** App HTTP + rotinas de fundo (transmitir offline, resolver pendentes, reenviar webhooks). */
+export function criarServico(deps: DependenciasApi) {
   const ctx = criarContexto(deps);
+  const app = montarApp(deps, ctx);
+  return {
+    app,
+    ctx,
+    executarRotinas: (opcoes?: Parameters<typeof executarRotinas>[1]) =>
+      executarRotinas(ctx, opcoes),
+  };
+}
+
+function montarApp(deps: DependenciasApi, ctx: ReturnType<typeof criarContexto>) {
   const app = new Hono<Ambiente>();
   app.onError(responderErro);
   app.notFound((c) =>
@@ -107,6 +124,59 @@ export function criarApp(deps: DependenciasApi) {
       "Content-Type": "application/zip",
       "Content-Disposition": `attachment; filename="fiscal-${empresa.cnpj.replace(/\D/g, "")}-${ano}-${String(mes).padStart(2, "0")}.zip"`,
     });
+  });
+
+  // ---- Webhook da empresa
+  app.get("/v1/webhook", (c) => {
+    const w = c.get("empresa").webhook;
+    return c.json(w ? { url: w.url, criadoEm: w.criadoEm } : null);
+  });
+
+  /** Configura (ou troca) a URL. Gera um segredo novo, mostrado só nesta resposta. */
+  app.put("/v1/webhook", async (c) => {
+    const empresa = c.get("empresa");
+    const { url } = await lerCorpo<{ url?: string }>(c);
+    const segredo = gerarSegredoWebhook();
+    empresa.webhook = {
+      url: validarUrlWebhook(url ?? ""),
+      segredo: ctx.webhooks.cifrarSegredo(empresa.id, segredo),
+      criadoEm: new Date().toISOString(),
+    };
+    empresa.atualizadaEm = new Date().toISOString();
+    await deps.empresas.salvar(empresa);
+    return c.json(
+      {
+        url: empresa.webhook.url,
+        segredo,
+        aviso:
+          "Guarde o segredo: ele não será mostrado de novo. Use-o para conferir Fiscal-Assinatura.",
+      },
+      201,
+    );
+  });
+
+  app.delete("/v1/webhook", async (c) => {
+    const { webhook: _, ...semWebhook } = c.get("empresa");
+    await deps.empresas.salvar({ ...semWebhook, atualizadaEm: new Date().toISOString() });
+    return c.body(null, 204);
+  });
+
+  /** Envia um evento "teste" agora e devolve como foi a entrega. */
+  app.post("/v1/webhook/teste", async (c) => {
+    const empresa = c.get("empresa");
+    if (!empresa.webhook) falhar(409, "WEBHOOK_NAO_CONFIGURADO", "Configure o webhook antes.");
+    const evento = await ctx.webhooks.publicar(empresa.id, "teste", { mensagem: "Olá!" });
+    await ctx.webhooks.aguardar();
+    const hoje = new Date().toISOString().slice(0, 10);
+    const entrega = (await ctx.webhooks.listar(empresa.id, hoje)).find((e) => e.id === evento?.id);
+    return c.json(entrega ?? null);
+  });
+
+  /** Entregas de um dia: ?dia=AAAA-MM-DD (padrão hoje, UTC). */
+  app.get("/v1/webhook/entregas", async (c) => {
+    const dia = c.req.query("dia") ?? new Date().toISOString().slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dia)) falhar(400, "DIA_INVALIDO", "Use ?dia=AAAA-MM-DD.");
+    return c.json(await ctx.webhooks.listar(c.get("empresa").id, dia));
   });
 
   app.route("/v1/nfce", rotasNfce());

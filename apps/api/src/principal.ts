@@ -4,7 +4,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { armazemDisco } from "@fiscal/armazenamento";
 import { armazemPostgres, prepararTabelas } from "@fiscal/numeracao";
 import { serve } from "@hono/node-server";
-import { criarApp } from "./app";
+import { criarServico } from "./app";
 import { criarCofre, gerarChaveMestra } from "./cofre";
 import { repositorioEmpresasEmArquivos } from "./empresas";
 
@@ -32,7 +32,7 @@ const executar = (sql: string, p: unknown[]) => banco.query<Record<string, unkno
 await prepararTabelas({ executar });
 
 const arquivos = armazemDisco(join(pasta, "arquivos"));
-const app = criarApp({
+const { app, executarRotinas } = criarServico({
   cofre: criarCofre(chaveMestra),
   empresas: repositorioEmpresasEmArquivos(arquivos),
   arquivos,
@@ -45,3 +45,21 @@ const porta = Number(process.env.PORTA ?? 8787);
 serve({ fetch: app.fetch, port: porta }, () => {
   console.log(`@fiscal/api ouvindo em http://localhost:${porta} (dados em ${pasta})`);
 });
+
+// Rotinas a cada minuto: transmite NFC-e offline, resolve pendentes e reenvia webhooks.
+// Nunca duas rodadas ao mesmo tempo.
+let rodando = false;
+setInterval(async () => {
+  if (rodando) return;
+  rodando = true;
+  try {
+    const r = await executarRotinas();
+    if (r.transmitidasOffline || r.pendentesResolvidas || r.erros.length || r.webhooks.entregues) {
+      console.log(JSON.stringify({ hora: new Date().toISOString(), rotinas: r }));
+    }
+  } catch (erro) {
+    console.error("[rotinas]", erro);
+  } finally {
+    rodando = false;
+  }
+}, 60_000).unref();

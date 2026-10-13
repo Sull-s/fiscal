@@ -8,9 +8,10 @@ import { armazemEmMemoria } from "@fiscal/numeracao";
 import { type ClienteSefaz, lerXmlComoObjeto } from "@fiscal/transporte";
 import { unzipSync } from "fflate";
 import { beforeAll, describe, expect, it } from "vitest";
-import { criarApp } from "./app";
+import { criarServico } from "./app";
 import { criarCofre, gerarChaveMestra } from "./cofre";
 import { repositorioEmpresasEmArquivos } from "./empresas";
+import { verificarWebhook } from "./webhooks";
 
 const TESTES = join(import.meta.dirname, "..", "testes");
 const PFX = readFileSync(join(TESTES, "certificado-teste.pfx")).toString("base64");
@@ -112,7 +113,14 @@ const venda = {
 
 const cofre = criarCofre(gerarChaveMestra());
 const arquivos = armazemArquivosEmMemoria();
-const app = criarApp({
+/** Webhooks recebidos pelo "sistema do cliente" simulado */
+const recebidos: { url: string; corpo: string; cabecalhos: Record<string, string> }[] = [];
+let respostaWebhook = 200;
+const { app, executarRotinas, ctx } = criarServico({
+  enviarWebhook: async (p) => {
+    recebidos.push(p);
+    return respostaWebhook;
+  },
   cofre,
   empresas: repositorioEmpresasEmArquivos(arquivos),
   arquivos,
@@ -465,5 +473,99 @@ describe("arquivos para o contador", () => {
     expect(nomes.filter((n) => n.startsWith("65/") && !n.includes("evento"))).toHaveLength(6);
     expect(nomes.some((n) => n.includes("evento-cancelamento"))).toBe(true);
     expect(nomes).toContain(`nfse/${CHAVE_NFSE}.xml`);
+  });
+});
+
+describe("webhooks e rotinas de fundo", () => {
+  let segredo = "";
+  const tipos = () => recebidos.map((r) => JSON.parse(r.corpo).tipo as string);
+  const daquiA = (ms: number) => new Date(Date.now() + ms);
+
+  it("só aceita https e devolve o segredo uma vez", async () => {
+    const http = await req("PUT", "/v1/webhook", chaveApi, { url: "http://cliente.exemplo/x" });
+    expect(http.status).toBe(422);
+    const r = await req("PUT", "/v1/webhook", chaveApi, { url: "https://cliente.exemplo/fiscal" });
+    expect(r.status).toBe(201);
+    segredo = ((await r.json()) as { segredo: string }).segredo;
+    expect(segredo).toMatch(/^whsec_/);
+    const empresa = await (await req("GET", "/v1/empresa", chaveApi)).text();
+    expect(empresa).toContain("https://cliente.exemplo/fiscal");
+    expect(empresa).not.toContain(segredo);
+    expect(new TextDecoder().decode(arquivos.arquivos.get("_empresas/rose.json"))).not.toContain(
+      segredo,
+    );
+  });
+
+  it("evento de teste chega assinado e a assinatura confere", async () => {
+    const r = await (await req("POST", "/v1/webhook/teste", chaveApi)).json();
+    expect(r).toMatchObject({ tipo: "teste", situacao: "entregue", tentativas: 1 });
+    const ultimo = recebidos.at(-1)!;
+    expect(ultimo.url).toBe("https://cliente.exemplo/fiscal");
+    expect(verificarWebhook(segredo, ultimo.corpo, ultimo.cabecalhos["Fiscal-Assinatura"]!)).toBe(
+      true,
+    );
+    expect(
+      verificarWebhook("whsec_outro", ultimo.corpo, ultimo.cabecalhos["Fiscal-Assinatura"]!),
+    ).toBe(false);
+    expect(
+      verificarWebhook(segredo, `${ultimo.corpo} `, ultimo.cabecalhos["Fiscal-Assinatura"]!),
+    ).toBe(false);
+  });
+
+  it("pendente: a rotina consulta a SEFAZ sozinha e avisa por webhook", async () => {
+    proximaAutorizacao = "sem-resposta";
+    const { chave } = (await (await req("POST", "/v1/nfce", chaveApi, { venda })).json()) as {
+      chave: string;
+    };
+    await ctx.webhooks.aguardar();
+    expect(tipos().at(-1)).toBe("nfce.pendente");
+
+    proximaAutorizacao = "100";
+    // Recém-emitida: a rotina ainda espera a própria emissão resolver
+    expect((await executarRotinas()).pendentesResolvidas).toBe(0);
+    const r = await executarRotinas({ agora: daquiA(120_000) });
+    expect(r.pendentesResolvidas).toBe(1);
+    await ctx.webhooks.aguardar();
+    const evento = JSON.parse(recebidos.at(-1)!.corpo);
+    expect(evento).toMatchObject({ tipo: "nfce.autorizada", dados: { id: chave } });
+  });
+
+  it("offline: a rotina transmite quando a SEFAZ volta", async () => {
+    await req("PUT", "/v1/admin/empresas/rose", ADMIN, {
+      nfce: { emitente, serie: "1", versaoAplicativo: "Teste API", contingenciaOffline: true },
+    });
+    proximaAutorizacao = "sem-conexao";
+    const { chave } = (await (await req("POST", "/v1/nfce", chaveApi, { venda })).json()) as {
+      chave: string;
+    };
+    expect((await executarRotinas()).transmitidasOffline).toBe(0);
+    proximaAutorizacao = "100";
+    expect((await executarRotinas()).transmitidasOffline).toBe(1);
+    await ctx.webhooks.aguardar();
+    expect(tipos().slice(-2)).toEqual(["nfce.offline", "nfce.autorizada"]);
+    expect(await (await req("GET", `/v1/nfce/${chave}`, chaveApi)).json()).toMatchObject({
+      situacao: "autorizada",
+    });
+  });
+
+  it("sistema do cliente fora do ar: tenta de novo com espera crescente", async () => {
+    respostaWebhook = 500;
+    const r = await (await req("POST", "/v1/webhook/teste", chaveApi)).json();
+    expect(r).toMatchObject({ situacao: "pendente", tentativas: 1, ultimoStatus: 500 });
+    const antes = recebidos.length;
+    await executarRotinas({ agora: daquiA(30_000) });
+    expect(recebidos.length).toBe(antes); // ainda não deu 1 minuto
+    respostaWebhook = 200;
+    const rodada = await executarRotinas({ agora: daquiA(61_000) });
+    expect(rodada.webhooks.entregues).toBe(1);
+    const entregas = (await (await req("GET", "/v1/webhook/entregas", chaveApi)).json()) as {
+      id: string;
+      situacao: string;
+      tentativas: number;
+    }[];
+    expect(entregas.find((e) => e.id === (r as { id: string }).id)).toMatchObject({
+      situacao: "entregue",
+      tentativas: 2,
+    });
   });
 });

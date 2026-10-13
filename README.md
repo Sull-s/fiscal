@@ -32,7 +32,7 @@ pnpm changeset     # registra uma mudança para a próxima versão
 | `@fiscal/numeracao` | ✅ 0.1.0 | Numeração atômica (PostgreSQL ou memória), reaproveitamento de rejeitadas, lacunas |
 | `@fiscal/nfe` | ⏳ | NF-e (modelo 55): emitir, CC-e, cancelar, devolução |
 | `@fiscal/dfe` | ⏳ | Notas contra o CNPJ e manifestação do destinatário |
-| `apps/api` | ✅ 0.1.0 | Serviço central multi-empresa: certificados cifrados, chaves de API, NFC-e, NFS-e, DANFE, ZIP. Ver [apps/api/README.md](apps/api/README.md) |
+| `apps/api` | ✅ 0.1.0 | Serviço central multi-empresa: certificados cifrados, chaves de API, NFC-e, NFS-e, DANFE, ZIP, webhooks assinados e rotinas automáticas. Ver [apps/api/README.md](apps/api/README.md) |
 | `@fiscal/ui` | ⏳ | Componentes React com tema do cliente |
 
 ## Princípios

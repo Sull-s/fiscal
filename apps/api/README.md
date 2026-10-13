@@ -52,12 +52,46 @@ curl -X POST localhost:8787/v1/admin/empresas/rose/chaves -H "Authorization: Bea
 | `GET /v1/numeracao/{65\|nfse}` | Próximo número, pendentes, liberados, lacunas |
 | `GET /v1/arquivos/{AAAA}/{MM}` | ZIP do mês para o contador (`?ambiente=2`, `?pdf=1`) |
 
+## Webhooks
+
+A empresa configura uma URL e recebe um `POST` a cada mudança de situação de nota
+(`nfce.autorizada`, `nfce.pendente`, `nfce.offline`, `nfce.cancelada`, `nfse.autorizada`…):
+
+| Rota | |
+|---|---|
+| `PUT /v1/webhook` | `{ "url": "https://…" }`. Devolve o `segredo` (whsec_…) **uma vez só** |
+| `GET /v1/webhook` · `DELETE /v1/webhook` | Ver / desligar |
+| `POST /v1/webhook/teste` | Envia um evento `teste` agora e mostra o resultado |
+| `GET /v1/webhook/entregas?dia=AAAA-MM-DD` | O que foi enviado no dia e como foi |
+
+Corpo: `{ id, tipo, empresa, criadoEm, dados }` (`dados` = a nota). Responda 2xx em até 10 s.
+Falhou? Nova tentativa em 1 min, 5 min, 30 min, 2 h, 6 h e 12 h. O mesmo evento pode chegar mais
+de uma vez: ignore `id` repetido. Confira a assinatura antes de confiar:
+
+```js
+import { createHmac, timingSafeEqual } from "node:crypto";
+// cabecalho = req.headers["fiscal-assinatura"] ("t=…,v1=…"); corpo = o texto cru recebido
+function webhookValido(segredo, corpo, cabecalho) {
+  const p = Object.fromEntries(cabecalho.split(",").map((x) => x.split("=", 2)));
+  if (Math.abs(Date.now() / 1000 - Number(p.t)) > 300) return false;
+  const esperado = createHmac("sha256", segredo).update(`${p.t}.${corpo}`).digest("hex");
+  return esperado.length === p.v1?.length && timingSafeEqual(Buffer.from(esperado), Buffer.from(p.v1));
+}
+```
+
+## Rotinas de fundo
+
+O servidor roda a cada minuto, sozinho: transmite NFC-e offline quando a SEFAZ volta, resolve NFC-e
+e NFS-e pendentes (consulta pela chave / Id da DPS, depois de 1 minuto) e reenvia webhooks. Quem
+usa a API como biblioteca chama `criarServico(deps).executarRotinas()`.
+
 ## Contingência offline da NFC-e
 
 Com `"contingenciaOffline": true` no `nfce` do cadastro da empresa, se a SEFAZ estiver fora do ar
 na hora da venda a nota sai **offline** (tpEmis 9): resposta 202 com `situacao: "offline"`. Imprima o
 DANFE (ele sai com "EMITIDA EM CONTINGÊNCIA"; imprima também `via=estabelecimento` e guarde) e
-chame `POST /v1/nfce/offline/transmitir` quando a SEFAZ voltar. O prazo legal para transmitir é curto.
+a API transmite sozinha quando a SEFAZ voltar (rotina de 1 em 1 minuto; `POST /v1/nfce/offline/transmitir`
+força na hora). O prazo legal para transmitir é curto.
 
 - SEFAZ nunca recebeu a tentativa online: a nota offline usa o mesmo número.
 - Tentativa online ficou sem resposta (pode ter sido autorizada): a offline usa outro número e a

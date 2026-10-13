@@ -8,6 +8,7 @@ import { type ClienteSefaz, criarClienteSefaz } from "@fiscal/transporte";
 import type { Cofre } from "./cofre";
 import type { Empresa, RepositorioEmpresas } from "./empresas";
 import { criarRegistros } from "./registros";
+import { type EnviarWebhook, criarWebhooks } from "./webhooks";
 
 export interface DependenciasApi {
   cofre: Cofre;
@@ -22,6 +23,8 @@ export interface DependenciasApi {
   fabricaNfse?: (certificado: CertificadoA1, ambiente: 1 | 2) => ClienteNfse;
   /** Recebe cada chamada à SEFAZ/Sistema Nacional (log/auditoria) */
   aoRegistrar?: (evento: Record<string, unknown>) => void;
+  /** Troca o envio HTTP dos webhooks (testes). Padrão: fetch */
+  enviarWebhook?: EnviarWebhook;
 }
 
 /** Monta os serviços e guarda em cache, por empresa, o certificado aberto e os clientes. */
@@ -35,7 +38,18 @@ export function criarContexto(deps: DependenciasApi) {
   const cache = new Map<string, EntradaCache>();
   const numeracao = criarNumeracao(deps.numeracao);
   const arquivoFiscal = criarArquivoFiscal(deps.arquivos);
-  const registros = criarRegistros(deps.arquivos);
+  const webhooks = criarWebhooks({
+    armazem: deps.arquivos,
+    empresas: deps.empresas,
+    cofre: deps.cofre,
+    ...(deps.enviarWebhook ? { enviar: deps.enviarWebhook } : {}),
+  });
+  // Toda mudança de situação de nota vira evento: "nfce.autorizada", "nfse.cancelada"…
+  const registros = criarRegistros(deps.arquivos, {
+    aoMudarSituacao: async (empresa, r) => {
+      await webhooks.publicar(empresa, `${r.modelo === "65" ? "nfce" : "nfse"}.${r.situacao}`, r);
+    },
+  });
 
   function entrada(empresa: Empresa): EntradaCache {
     const cert = empresa.certificado;
@@ -67,6 +81,7 @@ export function criarContexto(deps: DependenciasApi) {
     numeracao,
     arquivoFiscal,
     registros,
+    webhooks,
     certificado: (empresa: Empresa) => entrada(empresa).certificado,
     sefaz(empresa: Empresa): ClienteSefaz {
       const e = entrada(empresa);
