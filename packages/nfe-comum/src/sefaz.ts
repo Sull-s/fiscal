@@ -1,5 +1,5 @@
 import { ErroFiscal, type Uf } from "@fiscal/core";
-import { type ClienteSefaz, podeTerSidoProcessado } from "@fiscal/transporte";
+import { type ClienteSefaz, type Contingencia, podeTerSidoProcessado } from "@fiscal/transporte";
 import { type MaterialAssinatura, assinarXml } from "@fiscal/xml";
 import { NS_NFE } from "./constantes";
 import { montarCancelamento, montarCartaCorrecao, montarInutilizacao } from "./eventos";
@@ -81,12 +81,15 @@ export async function autorizarNota(
     modelo: ModeloNfe;
     ambiente: 1 | 2;
     xmlAssinado: string;
+    /** NF-e emitida em contingência SVC (tpEmis 6/7): vai para a SEFAZ virtual */
+    contingencia?: Contingencia;
     /** Tentativas de buscar o resultado quando a SEFAZ responde 103 (processamento assíncrono) */
     consultasRecibo?: number;
     esperaReciboMs?: number;
   },
 ): Promise<ResultadoAutorizacao> {
   const { uf, ambiente, modelo } = pedido;
+  const svc = pedido.contingencia ? { contingencia: pedido.contingencia } : {};
   const nota = sem(pedido.xmlAssinado);
   const mensagem = `<enviNFe xmlns="${NS_NFE}" versao="4.00"><idLote>${gerarIdLote()}</idLote><indSinc>1</indSinc>${nota}</enviNFe>`;
 
@@ -96,6 +99,7 @@ export async function autorizarNota(
       uf,
       modelo,
       ambiente,
+      ...svc,
       servico: "autorizacao",
       mensagem,
     });
@@ -116,7 +120,14 @@ export async function autorizarNota(
     // 204: esta mesma chave já foi autorizada (ex.: reenvio após "pendente"): busca o protocolo
     if (inf.cStat === "204") {
       const chave = /Id="NFe(\d{44})"/.exec(nota)?.[1] ?? "";
-      const consulta = await consultarNota(cliente, { uf, modelo, ambiente, chave, xmlNota: nota });
+      const consulta = await consultarNota(cliente, {
+        uf,
+        modelo,
+        ambiente,
+        chave,
+        xmlNota: nota,
+        ...svc,
+      });
       if (consulta.situacao === "autorizada") return { ...consulta, situacao: "autorizada" };
     }
     return comProtocolo(nota, resposta.xmlRetorno, inf);
@@ -144,6 +155,7 @@ export async function autorizarNota(
         uf,
         modelo,
         ambiente,
+        ...svc,
         servico: "retAutorizacao",
         mensagem: `<consReciNFe xmlns="${NS_NFE}" versao="4.00"><tpAmb>${ambiente}</tpAmb><nRec>${nRec}</nRec></consReciNFe>`,
       });
@@ -190,11 +202,26 @@ function situacaoDaConsulta(cStat: string): SituacaoNaSefaz {
  */
 export async function consultarNota(
   cliente: ClienteSefaz,
-  pedido: { uf: Uf; modelo: ModeloNfe; ambiente: 1 | 2; chave: string; xmlNota?: string },
+  pedido: {
+    uf: Uf;
+    modelo: ModeloNfe;
+    ambiente: 1 | 2;
+    chave: string;
+    xmlNota?: string;
+    /** Consulta na SEFAZ virtual de contingência */
+    contingencia?: Contingencia;
+  },
 ): Promise<ResultadoConsulta> {
   const { uf, ambiente, chave, modelo } = pedido;
   const mensagem = `<consSitNFe xmlns="${NS_NFE}" versao="4.00"><tpAmb>${ambiente}</tpAmb><xServ>CONSULTAR</xServ><chNFe>${chave}</chNFe></consSitNFe>`;
-  const r = await cliente.chamar({ uf, modelo, ambiente, servico: "consulta", mensagem });
+  const r = await cliente.chamar({
+    uf,
+    modelo,
+    ambiente,
+    servico: "consulta",
+    mensagem,
+    ...(pedido.contingencia ? { contingencia: pedido.contingencia } : {}),
+  });
   const ret = (r.dados.retConsSitNFe ?? {}) as Campos & { protNFe?: { infProt?: Campos } };
   const cStat = ret.cStat ?? "";
   const situacao = situacaoDaConsulta(cStat);
@@ -236,6 +263,8 @@ export async function enviarEvento(
     /** <evento> sem assinatura */
     xmlEvento: string;
     certificado: MaterialAssinatura;
+    /** Evento de nota autorizada na SVC, enquanto a contingência está ativa */
+    contingencia?: Contingencia;
   },
 ): Promise<ResultadoEvento> {
   const evento = assinarXml(pedido.xmlEvento, {
@@ -250,6 +279,7 @@ export async function enviarEvento(
     ambiente: pedido.ambiente,
     servico: "evento",
     mensagem,
+    ...(pedido.contingencia ? { contingencia: pedido.contingencia } : {}),
   });
   const ret = (r.dados.retEnvEvento ?? {}) as Campos & { retEvento?: { infEvento?: Campos } };
   const inf = ret.retEvento?.infEvento;
@@ -276,6 +306,7 @@ export function cancelarNota(
     uf: Uf;
     modelo: ModeloNfe;
     certificado: MaterialAssinatura;
+    contingencia?: Contingencia;
   },
 ): Promise<ResultadoEvento> {
   return enviarEvento(cliente, { ...pedido, xmlEvento: montarCancelamento(pedido).xml });
@@ -287,6 +318,7 @@ export function enviarCartaCorrecao(
   pedido: Parameters<typeof montarCartaCorrecao>[0] & {
     uf: Uf;
     certificado: MaterialAssinatura;
+    contingencia?: Contingencia;
   },
 ): Promise<ResultadoEvento> {
   return enviarEvento(cliente, {

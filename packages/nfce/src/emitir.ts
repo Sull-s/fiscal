@@ -116,7 +116,7 @@ export async function emitirNfce(entrada: {
     } catch (erro) {
       // Sem contingência, ou erro de programa (não de comunicação): sobe como está
       if (!entrada.contingencia || !(erro instanceof ErroFiscal)) throw erro;
-      const inicio = new Date();
+      const inicio = entrada.nota.dataEmissao ?? new Date();
       const motivo = limitar(`${entrada.contingencia.justificativa} (${erro.codigo})`);
       if (!podeTerSidoProcessado(erro)) return offline(numero, { inicio, justificativa: motivo });
       return offline(
@@ -132,7 +132,7 @@ export async function emitirNfce(entrada: {
       const justificativa = limitar(`${entrada.contingencia.justificativa} (sem resposta)`);
       return offline(
         await entrada.proximoNumero(),
-        { inicio: new Date(), justificativa },
+        { inicio: entrada.nota.dataEmissao ?? new Date(), justificativa },
         { nota, xmlAssinado },
       );
     }

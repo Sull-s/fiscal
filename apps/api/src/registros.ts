@@ -37,6 +37,8 @@ export interface RegistroNota {
   substitui?: string;
   /** Nota offline que substituiu esta tentativa online (chave) */
   substituidaPor?: string;
+  /** NF-e autorizada pela SEFAZ virtual de contingência */
+  svc?: "SVC-AN" | "SVC-RS";
   /** NF-e: quantas cartas de correção já foram registradas */
   cartasCorrecao?: number;
   criadaEm: string;

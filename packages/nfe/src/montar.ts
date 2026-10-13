@@ -17,6 +17,7 @@ import {
   textoCreditoSimples,
   totalDoItemEmCentavos,
 } from "@fiscal/nfe-comum";
+import { CONTINGENCIA_DA_UF } from "@fiscal/transporte";
 import {
   escaparTexto,
   formatarDecimal,
@@ -76,6 +77,22 @@ export function montarNfe(entrada: {
   const dhEmi = formatarDataHoraSefaz(nota.dataEmissao ?? new Date(), nota.fuso);
   const cnpj = somenteDigitos(emitente.cnpj);
   const cNF = nota.codigoNumerico ?? gerarCodigoNumerico(nota.numero);
+  const cont = nota.contingencia;
+  const svc = cont ? (cont.svc ?? CONTINGENCIA_DA_UF[uf]) : undefined;
+  const tpEmis = svc === "SVC-AN" ? 6 : svc === "SVC-RS" ? 7 : 1;
+  const xJust = cont ? limparTexto(cont.justificativa, 256) : "";
+  if (cont) {
+    const problemas: string[] = [];
+    if (xJust.length < 15)
+      problemas.push("Justificativa da contingência precisa de 15 a 256 caracteres.");
+    if (
+      Number.isNaN(cont.inicio.getTime()) ||
+      cont.inicio.getTime() > (nota.dataEmissao ?? new Date()).getTime() + 1000
+    )
+      problemas.push("Início da contingência inválido ou depois da emissão.");
+    if (problemas.length)
+      throw new ErroFiscal("NFE_CONTINGENCIA_INVALIDA", problemas.join(" "), { problemas });
+  }
   const chave = montarChaveAcesso({
     uf,
     anoMes: anoMesDaEmissao(dhEmi),
@@ -83,7 +100,7 @@ export function montarNfe(entrada: {
     modelo: "55",
     serie: nota.serie,
     numero: nota.numero,
-    tipoEmissao: 1,
+    tipoEmissao: tpEmis,
     codigoNumerico: cNF,
   });
 
@@ -184,7 +201,7 @@ export function montarNfe(entrada: {
     tag("idDest", idDest) +
     tag("cMunFG", somenteDigitos(emitente.endereco.codigoMunicipio)) +
     tag("tpImp", "1") +
-    tag("tpEmis", "1") +
+    tag("tpEmis", tpEmis) +
     tag("cDV", chave.slice(-1)) +
     tag("tpAmb", tpAmb) +
     tag("finNFe", finalidade) +
@@ -194,6 +211,9 @@ export function montarNfe(entrada: {
     ([2, 3, 4, 9].includes(presenca) ? tag("indIntermed", "0") : "") +
     tag("procEmi", "0") +
     texto("verProc", nota.versaoAplicativo ?? "@fiscal/nfe", 20) +
+    (cont
+      ? tag("dhCont", formatarDataHoraSefaz(cont.inicio, nota.fuso)) + texto("xJust", xJust)
+      : "") +
     (nota.referencias ?? []).map((ch) => `<NFref>${tag("refNFe", ch)}</NFref>`).join("") +
     "</ide>";
 
@@ -340,6 +360,7 @@ export function montarNfe(entrada: {
     dataEmissao: dhEmi,
     ambiente: tpAmb,
     valorTotal: reais(vNF),
+    ...(svc ? { contingencia: svc } : {}),
     impostos: {
       icms: reais(tot.vICMS),
       fcp: reais(tot.vFCP),

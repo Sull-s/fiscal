@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { abrirCertificadoA1 } from "@fiscal/certificado";
-import { type ErroFiscal, decomporChaveAcesso, montarChaveAcesso } from "@fiscal/core";
+import { ErroFiscal, decomporChaveAcesso, montarChaveAcesso } from "@fiscal/core";
 import { assinarXml, validarContraXsd, verificarAssinaturas } from "@fiscal/xml";
 import { describe, expect, it } from "vitest";
 import { chaveDe, clienteFalso, protNFe, retEnviNFe } from "../../nfe-comum/testes/sefaz-falsa";
@@ -351,5 +351,92 @@ describe("emitirNfe", () => {
     expect(
       (await validarContraXsd(r.autorizacao.xmlProcessado!, xsd("procNFe_v4.00.xsd"))).erros,
     ).toEqual([]);
+  });
+});
+
+describe("contingência SVC", () => {
+  const contingencia = {
+    inicio: new Date("2026-10-12T12:50:00Z"),
+    justificativa: "SEFAZ do estado fora do ar no momento da emissao",
+  };
+
+  it("RS vai para a SVC-AN (tpEmis 6) com dhCont e xJust; passa no XSD", async () => {
+    const n = montarNfe({
+      emitente: emitenteSimples,
+      operacao: vendaSimples,
+      nota: { ...nota, contingencia },
+    });
+    expect(n.contingencia).toBe("SVC-AN");
+    expect(decomporChaveAcesso(n.chave).tipoEmissao).toBe(6);
+    expect(n.xml).toContain("<tpEmis>6</tpEmis>");
+    expect(n.xml).toContain(
+      "<dhCont>2026-10-12T09:50:00-03:00</dhCont><xJust>SEFAZ do estado fora do ar no momento da emissao</xJust>",
+    );
+    await passaNoXsd(n.xml);
+    const rs = montarNfe({
+      emitente: emitenteSimples,
+      operacao: vendaSimples,
+      nota: { ...nota, contingencia: { ...contingencia, svc: "SVC-RS" } },
+    });
+    expect(rs.xml).toContain("<tpEmis>7</tpEmis>");
+  });
+
+  const autorizada = (c: { mensagem: string }) =>
+    retEnviNFe(
+      "104",
+      "Lote processado",
+      protNFe({
+        chave: chaveDe(c.mensagem),
+        cStat: "100",
+        xMotivo: "Autorizado o uso da NF-e",
+        nProt: "143260000009999",
+      }),
+    );
+  const { numero: _, codigoNumerico: __, ...semNumero } = nota;
+  const base = {
+    certificado,
+    agora: new Date("2026-10-12T13:00:00Z"),
+    emitente: emitenteSimples,
+    operacao: vendaSimples,
+    nota: semNumero,
+    contingencia: { justificativa: "SEFAZ RS indisponivel" },
+  };
+
+  it("SEFAZ do estado sem conexão: mesmo número autorizado na SVC", async () => {
+    const { cliente, chamadas } = clienteFalso((c) =>
+      c.contingencia
+        ? autorizada(c)
+        : new ErroFiscal("SEFAZ_SEM_CONEXAO", "sem conexão", { podeTerSidoProcessado: false }),
+    );
+    let n = 50;
+    const r = await emitirNfe({ ...base, cliente, proximoNumero: async () => n++ });
+    expect(chamadas.map((c) => c.contingencia ?? "UF")).toEqual(["UF", "SVC-AN"]);
+    expect(r.nota).toMatchObject({ numero: 50, contingencia: "SVC-AN" });
+    expect(r.autorizacao.situacao).toBe("autorizada");
+    expect(r.xmlAssinado).toContain("(SEFAZ_SEM_CONEXAO)</xJust>");
+    expect(r.tentativaPendente).toBeUndefined();
+  });
+
+  it("sem resposta: SVC com outro número e devolve a tentativa para conferir", async () => {
+    const { cliente } = clienteFalso((c) =>
+      c.contingencia
+        ? autorizada(c)
+        : new ErroFiscal("SEFAZ_SEM_RESPOSTA", "sem resposta", { podeTerSidoProcessado: true }),
+    );
+    let n = 70;
+    const r = await emitirNfe({ ...base, cliente, proximoNumero: async () => n++ });
+    expect(r.nota.numero).toBe(71);
+    expect(r.tentativaPendente?.nota).toMatchObject({ numero: 70 });
+    expect(r.tentativaPendente?.nota.contingencia).toBeUndefined();
+  });
+
+  it("sem a opção, o erro de conexão sobe como antes", async () => {
+    const { cliente } = clienteFalso(
+      () => new ErroFiscal("SEFAZ_SEM_CONEXAO", "sem conexão", { podeTerSidoProcessado: false }),
+    );
+    const { contingencia: _c, ...semOpcao } = base;
+    await expect(
+      emitirNfe({ ...semOpcao, cliente, proximoNumero: async () => 1 }),
+    ).rejects.toMatchObject({ codigo: "SEFAZ_SEM_CONEXAO" });
   });
 });

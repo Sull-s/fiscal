@@ -67,6 +67,11 @@ export function rotasNfe() {
           serie: Number(nfe.serie),
           versaoAplicativo: nfe.versaoAplicativo ?? "@fiscal/api",
         },
+        ...(nfe.contingenciaSvc
+          ? {
+              contingencia: { justificativa: "SEFAZ do estado indisponivel no momento da emissao" },
+            }
+          : {}),
         proximoNumero: async () => {
           const n = await ctx.numeracao.reservar(serie, corpo.referencia);
           reservados.push(n);
@@ -94,8 +99,35 @@ export function rotasNfe() {
       nota.chave,
     );
 
+    // Tentativa na SEFAZ do estado sem resposta antes da SVC: fica pendente e, se tiver sido
+    // autorizada, a rotina a cancela (a venda saiu pela SVC com outro número)
+    const tentativa = emissao.tentativaPendente;
+    if (tentativa) {
+      const agora = new Date().toISOString();
+      const original: RegistroNota = {
+        id: tentativa.nota.chave,
+        chave: tentativa.nota.chave,
+        modelo: MODELO,
+        ambiente: empresa.ambiente,
+        numero: tentativa.nota.numero,
+        serie: nfe.serie,
+        dataEmissao: tentativa.nota.dataEmissao,
+        situacao: "pendente",
+        valorTotal: tentativa.nota.valorTotal,
+        substituidaPor: nota.chave,
+        motivo: "Sem resposta da SEFAZ; nota refeita em contingência SVC",
+        criadaEm: agora,
+        atualizadaEm: agora,
+      };
+      await ctx.arquivoFiscal.guardar(documento(empresa, original), "nota", tentativa.xmlAssinado);
+      await ctx.numeracao.registrar(serie, original.numero, "pendente", original.id);
+      await ctx.registros.salvar(empresa.id, original);
+    }
+
     const resposta = {
       chave: nota.chave,
+      ...(nota.contingencia ? { contingencia: nota.contingencia } : {}),
+      ...(tentativa ? { substitui: tentativa.nota.chave } : {}),
       numero: nota.numero,
       serie: nfe.serie,
       situacao: autorizacao.situacao,
@@ -126,6 +158,8 @@ export function rotasNfe() {
         ...(autorizacao.protocolo ? { protocolo: autorizacao.protocolo } : {}),
         valorTotal: nota.valorTotal,
         motivo: autorizacao.motivo,
+        ...(nota.contingencia ? { svc: nota.contingencia } : {}),
+        ...(tentativa ? { substitui: tentativa.nota.chave } : {}),
         ...(corpo.referencia ? { referencia: corpo.referencia } : {}),
         criadaEm: agora,
         atualizadaEm: agora,

@@ -24,7 +24,13 @@ export interface Empresa {
     contingenciaOffline?: boolean;
   };
   nfse?: { prestador: Prestador; serie: string; versaoAplicativo?: string };
-  nfe?: { emitente: EmitenteNfe; serie: string; versaoAplicativo?: string };
+  nfe?: {
+    emitente: EmitenteNfe;
+    serie: string;
+    versaoAplicativo?: string;
+    /** SEFAZ do estado fora do ar: emite pela SEFAZ virtual de contingência (SVC) em vez de falhar */
+    contingenciaSvc?: boolean;
+  };
   certificado?: {
     /** .pfx cifrado pelo cofre */
     pfx: string;

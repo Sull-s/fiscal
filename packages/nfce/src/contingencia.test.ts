@@ -133,6 +133,18 @@ describe("emitirNfce com contingência automática", () => {
     expect(r.tentativaOnlinePendente?.nota).toMatchObject({ numero: 10, offline: false });
   });
 
+  it("data de emissão informada pelo sistema: a contingência não começa depois dela", async () => {
+    const { cliente } = clienteFalso(() => semConexao());
+    const r = await emitirNfce({
+      ...base,
+      cliente,
+      nota: { ...base.nota, dataEmissao: new Date("2026-10-09T17:00:00Z") },
+      proximoNumero: numeracao(30),
+    });
+    expect(r.autorizacao.situacao).toBe("offline");
+    expect(r.xmlAssinado).toContain("<dhCont>2026-10-09T14:00:00-03:00</dhCont>");
+  });
+
   it("SEFAZ paralisada (108): offline", async () => {
     const { cliente } = clienteFalso(() => retEnviNFe("108", "Servico Paralisado Momentaneamente"));
     const r = await emitirNfce({ ...base, cliente, proximoNumero: numeracao(1) });

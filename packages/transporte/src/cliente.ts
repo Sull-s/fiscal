@@ -5,6 +5,7 @@ import {
   type Ambiente,
   CATALOGO_PADRAO,
   type CatalogoWebservices,
+  type Contingencia,
   type ModeloSefaz,
   type PedidoWebservice,
   type ServicoSefaz,
@@ -81,6 +82,8 @@ export interface ClienteSefaz {
     uf: Uf;
     modelo: ModeloSefaz;
     ambiente: Ambiente;
+    /** Status da SEFAZ virtual de contingência (SVC) em vez da SEFAZ da UF */
+    contingencia?: Contingencia;
   }): Promise<StatusServico>;
   /** Fecha as conexões mantidas abertas */
   fechar(): void;
@@ -159,7 +162,12 @@ export function criarClienteSefaz(opcoes: OpcoesCliente): ClienteSefaz {
     });
   }
 
-  async function consultarStatus(pedido: { uf: Uf; modelo: ModeloSefaz; ambiente: Ambiente }) {
+  async function consultarStatus(pedido: {
+    uf: Uf;
+    modelo: ModeloSefaz;
+    ambiente: Ambiente;
+    contingencia?: Contingencia;
+  }) {
     const mensagem = `<consStatServ xmlns="${NS_NFE}" versao="4.00"><tpAmb>${pedido.ambiente}</tpAmb><cUF>${codigoUf(pedido.uf)}</cUF><xServ>STATUS</xServ></consStatServ>`;
     const resposta = await chamar({ ...pedido, servico: "status", mensagem });
     const agora = Date.now();

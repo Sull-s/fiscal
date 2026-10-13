@@ -159,6 +159,20 @@ export interface DadosNfe {
   versaoAplicativo?: string;
   /** PIS/COFINS com o ICMS na base (padrão: sem, Lei 14.592/2023) */
   icmsNaBasePisCofins?: boolean;
+  /**
+   * Emissão em contingência SVC (SEFAZ do estado fora do ar): tpEmis 6 (SVC-AN) ou 7 (SVC-RS).
+   * A nota é autorizada pela SEFAZ virtual e vale normalmente; não precisa transmitir de novo.
+   */
+  contingencia?: ContingenciaSvc;
+}
+
+export interface ContingenciaSvc {
+  /** Padrão: a SVC da UF do emitente (RS usa SVC-AN; SP, PR, BA… usam SVC-RS) */
+  svc?: "SVC-AN" | "SVC-RS";
+  /** Quando entrou em contingência (dhCont); não pode ser depois da emissão */
+  inicio: Date;
+  /** Motivo, 15 a 256 caracteres */
+  justificativa: string;
 }
 
 export interface NfeMontada {
@@ -170,6 +184,8 @@ export interface NfeMontada {
   dataEmissao: string;
   ambiente: 1 | 2;
   valorTotal: number;
+  /** SVC usada, quando emitida em contingência */
+  contingencia?: "SVC-AN" | "SVC-RS";
   /** Totais dos impostos destacados, em reais */
   impostos: { icms: number; fcp: number; ipi: number; pis: number; cofins: number };
 }

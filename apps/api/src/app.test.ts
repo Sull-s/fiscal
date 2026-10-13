@@ -30,11 +30,12 @@ const prot = (chave: string, cStat: string, xMotivo: string, nProt = "1432600000
   `<protNFe versao="4.00"><infProt><tpAmb>2</tpAmb><verAplic>RS</verAplic><chNFe>${chave}</chNFe><dhRecbto>2026-10-09T14:00:00-03:00</dhRecbto><nProt>${nProt}</nProt><cStat>${cStat}</cStat><xMotivo>${xMotivo}</xMotivo></infProt></protNFe>`;
 
 const sefazFalsa: ClienteSefaz = {
-  async chamar({ servico, mensagem }) {
+  async chamar({ servico, mensagem, contingencia }) {
     chamadasSefaz.push(servico);
     const chave = chaveDe(mensagem);
     let xml = "";
-    if (servico === "autorizacao") {
+    // A SEFAZ virtual de contingência (SVC) sempre atende
+    if (servico === "autorizacao" && !contingencia) {
       if (proximaAutorizacao === "sem-conexao") {
         throw new ErroFiscal("SEFAZ_SEM_CONEXAO", "Não consegui conectar na SEFAZ.", {
           podeTerSidoProcessado: false,
@@ -45,8 +46,10 @@ const sefazFalsa: ClienteSefaz = {
           podeTerSidoProcessado: true,
         });
       }
+    }
+    if (servico === "autorizacao") {
       xml =
-        proximaAutorizacao === "100"
+        proximaAutorizacao === "100" || contingencia
           ? `<retEnviNFe ${NS} versao="4.00"><cStat>104</cStat><xMotivo>Lote processado</xMotivo>${prot(chave, "100", "Autorizado o uso da NF-e")}</retEnviNFe>`
           : `<retEnviNFe ${NS} versao="4.00"><cStat>104</cStat><xMotivo>Lote processado</xMotivo>${prot(chave, "778", "Rejeicao: NCM inexistente")}</retEnviNFe>`;
     } else if (servico === "consulta") {
@@ -551,6 +554,31 @@ describe("NF-e pela API", () => {
     expect(((await r.json()) as { erro: { mensagem: string } }).erro.mensagem).toContain(
       "CFOP 6102 não combina com saída dentro do estado",
     );
+  });
+
+  it("SEFAZ sem resposta: sai pela SVC e a tentativa duplicada é cancelada", async () => {
+    await req("PUT", "/v1/admin/empresas/rose", ADMIN, {
+      nfe: { emitente: { ...emitente, crt: 1 }, serie: "1", contingenciaSvc: true },
+    });
+    proximaAutorizacao = "sem-resposta";
+    const r = await req("POST", "/v1/nfe", chaveApi, {
+      operacao,
+      nota: { naturezaOperacao: "Venda de mercadoria" },
+    });
+    proximaAutorizacao = "100";
+    const corpo = (await r.json()) as { chave: string; contingencia: string; substitui: string };
+    expect(r.status).toBe(201);
+    expect(corpo.contingencia).toBe("SVC-AN");
+    expect(corpo.chave.slice(34, 35)).toBe("6");
+    // A tentativa na SEFAZ do estado foi autorizada (diz a consulta): a API cancela
+    expect(await (await req("GET", `/v1/nfe/${corpo.substitui}`, chaveApi)).json()).toMatchObject({
+      situacao: "cancelada",
+      substituidaPor: corpo.chave,
+    });
+    expect(eventosEnviados.at(-1)).toContain("<tpEvento>110111</tpEvento>");
+    await req("PUT", "/v1/admin/empresas/rose", ADMIN, {
+      nfe: { emitente: { ...emitente, crt: 1 }, serie: "1" },
+    });
   });
 
   it("carta de correção numerada sozinha e cancelamento", async () => {

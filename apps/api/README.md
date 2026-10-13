@@ -89,6 +89,14 @@ O servidor roda a cada minuto, sozinho: transmite NFC-e offline quando a SEFAZ v
 e NFS-e pendentes (consulta pela chave / Id da DPS, depois de 1 minuto) e reenvia webhooks. Quem
 usa a API como biblioteca chama `criarServico(deps).executarRotinas()`.
 
+## Contingência SVC da NF-e
+
+Com `"contingenciaSvc": true` no `nfe` do cadastro, se a SEFAZ do estado estiver fora a NF-e é
+autorizada pela SEFAZ virtual (SVC-AN ou SVC-RS, conforme a UF): resposta 201 com
+`"contingencia": "SVC-AN"`. Ela vale normalmente; não precisa transmitir de novo. Se a tentativa na
+SEFAZ do estado ficou sem resposta, a NF-e da SVC usa outro número, a resposta traz `substitui` e,
+se a SEFAZ tiver autorizado aquela tentativa, a API a cancela sozinha.
+
 ## Contingência offline da NFC-e
 
 Com `"contingenciaOffline": true` no `nfce` do cadastro da empresa, se a SEFAZ estiver fora do ar
