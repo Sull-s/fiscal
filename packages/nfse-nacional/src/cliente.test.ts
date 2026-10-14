@@ -178,7 +178,7 @@ describe("cancelarNfse", () => {
       codigoMotivo: 2,
     });
     expect(pedidos[0]?.url).toMatch(new RegExp(`/nfse/${CHAVE}/eventos$`));
-    const enviado = deGz(JSON.parse(pedidos[0]?.corpo ?? "{}").pedRegEventoXmlGZipB64);
+    const enviado = deGz(JSON.parse(pedidos[0]?.corpo ?? "{}").pedidoRegistroEventoXmlGZipB64);
     expect(enviado).toContain("<cMotivo>2</cMotivo>");
     expect(verificarAssinaturas(enviado).valida).toBe(true);
     expect(r).toMatchObject({ registrado: true, xmlEvento: "<evento>ok</evento>" });

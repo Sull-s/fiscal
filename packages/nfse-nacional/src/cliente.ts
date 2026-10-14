@@ -229,7 +229,8 @@ export function criarClienteNfse(opcoes: OpcoesClienteNfse) {
     /** POST /nfse/{chave}/eventos: registra o evento (ex.: cancelamento e101101) já assinado. */
     async registrarEvento(chave: string, xmlEventoAssinado: string) {
       const resposta = await chamar("POST", `/nfse/${chave}/eventos`, {
-        pedRegEventoXmlGZipB64: gzipBase64(xmlEventoAssinado),
+        // Nome do campo conforme a API do Sistema Nacional (o curto "pedReg…" dá HTTP 500 genérico)
+        pedidoRegistroEventoXmlGZipB64: gzipBase64(xmlEventoAssinado),
       });
       const b64 = campo(resposta.json, "eventoXmlGZipB64");
       const registrado = resposta.statusHttp === 200 || resposta.statusHttp === 201;

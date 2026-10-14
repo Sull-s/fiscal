@@ -63,8 +63,11 @@ async function cancelar(chave) {
     motivo: "Teste de homologacao do pacote fiscal",
     codigoMotivo: 1,
   });
-  const { xmlPedidoAssinado, ...resumo } = cancelamento;
-  console.log("Cancelamento:", resumo);
+  console.log("Cancelamento:", {
+    registrado: cancelamento.registrado,
+    xmlEvento: cancelamento.xmlEvento ? "(ok)" : undefined,
+    erros: cancelamento.erros,
+  });
 }
 
 try {
@@ -105,10 +108,6 @@ try {
   console.log("Consulta:", consulta.xmlNfse ? "NFS-e encontrada" : consulta);
 
   if (!opcoes.includes("--sem-cancelar")) {
-    // O evento sai com a hora 60 s atrasada (margem do relógio): cancelar logo em seguida daria
-    // um evento "antes" da própria nota
-    console.log("Esperando 90 s antes de cancelar…");
-    await new Promise((r) => setTimeout(r, 90_000));
     await cancelar(emissao.chave);
   }
 } finally {
