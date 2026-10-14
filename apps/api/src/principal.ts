@@ -12,6 +12,7 @@ import pg from "pg";
 import { criarServico } from "./app";
 import { criarCofre, gerarChaveMestra } from "./cofre";
 import { repositorioEmpresasEmArquivos } from "./empresas";
+import { alertasPorUrl } from "./monitor";
 
 /**
  * Variáveis de ambiente:
@@ -21,6 +22,8 @@ import { repositorioEmpresasEmArquivos } from "./empresas";
  *   FISCAL_BANCO_URL      Postgres (Supabase, Neon…): numeração, XMLs, PDFs e cadastro ficam no banco.
  *                         Sem ela, tudo fica na pasta FISCAL_PASTA_DADOS.
  *   FISCAL_PASTA_DADOS    pasta de XMLs, PDFs, cadastro e numeração (padrão ./dados)
+ *   FISCAL_ALERTA_URL     webhook para alertas (Slack, Discord…): certificado vencendo, SEFAZ fora,
+ *                         notas presas, relógio errado
  *   PORTA                 padrão 8787
  */
 const chaveMestra = process.env.FISCAL_CHAVE_MESTRA;
@@ -56,6 +59,9 @@ const { app, executarRotinas } = criarServico({
   numeracao: armazemPostgres({ executar }),
   ...(process.env.FISCAL_TOKEN_ADMIN ? { tokenAdmin: process.env.FISCAL_TOKEN_ADMIN } : {}),
   aoRegistrar: (e) => console.log(JSON.stringify({ hora: new Date().toISOString(), ...e })),
+  ...(process.env.FISCAL_ALERTA_URL
+    ? { enviarAlertas: alertasPorUrl(process.env.FISCAL_ALERTA_URL) }
+    : {}),
 });
 
 const porta = Number(process.env.PORTA ?? 8787);
@@ -73,7 +79,14 @@ setInterval(async () => {
   rodando = true;
   try {
     const r = await executarRotinas();
-    if (r.transmitidasOffline || r.pendentesResolvidas || r.erros.length || r.webhooks.entregues) {
+    if (
+      r.transmitidasOffline ||
+      r.pendentesResolvidas ||
+      r.erros.length ||
+      r.webhooks.entregues ||
+      r.alertas ||
+      r.dfeNovos
+    ) {
       console.log(JSON.stringify({ hora: new Date().toISOString(), rotinas: r }));
     }
   } catch (erro) {

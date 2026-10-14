@@ -7,6 +7,7 @@ import { type ArmazemNumeracao, criarNumeracao } from "@fiscal/numeracao";
 import { type ClienteSefaz, criarClienteSefaz } from "@fiscal/transporte";
 import type { Cofre } from "./cofre";
 import type { Empresa, RepositorioEmpresas } from "./empresas";
+import type { EnviarAlertas } from "./monitor";
 import { criarRegistros } from "./registros";
 import { type EnviarWebhook, criarWebhooks } from "./webhooks";
 
@@ -25,6 +26,8 @@ export interface DependenciasApi {
   aoRegistrar?: (evento: Record<string, unknown>) => void;
   /** Troca o envio HTTP dos webhooks (testes). Padrão: fetch */
   enviarWebhook?: EnviarWebhook;
+  /** Para onde mandar os alertas do monitoramento (ex.: alertasPorUrl(FISCAL_ALERTA_URL)) */
+  enviarAlertas?: EnviarAlertas;
 }
 
 /** Monta os serviços e guarda em cache, por empresa, o certificado aberto e os clientes. */

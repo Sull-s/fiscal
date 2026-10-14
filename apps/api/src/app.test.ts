@@ -138,7 +138,11 @@ const arquivos = armazemArquivosEmMemoria();
 /** Webhooks recebidos pelo "sistema do cliente" simulado */
 const recebidos: { url: string; corpo: string; cabecalhos: Record<string, string> }[] = [];
 let respostaWebhook = 200;
+const alertasRecebidos: { chave: string; gravidade: string; mensagem: string }[] = [];
 const { app, executarRotinas, ctx } = criarServico({
+  enviarAlertas: async (a) => {
+    alertasRecebidos.push(...a);
+  },
   enviarWebhook: async (p) => {
     recebidos.push(p);
     return respostaWebhook;
@@ -807,5 +811,35 @@ describe("DF-e: notas de fornecedores", () => {
     expect(await (await req("GET", `/v1/dfe/notas/${chave}`, chaveApi)).json()).toMatchObject({
       manifestacao: { tipo: "confirmacao" },
     });
+  });
+});
+
+describe("monitoramento", () => {
+  it("rota do administrador mostra empresas, notas presas e certificado", async () => {
+    const r = (await (await req("GET", "/v1/admin/monitor", ADMIN)).json()) as {
+      empresas: { id: string; diasCertificado: number }[];
+      alertas: unknown[];
+    };
+    expect(r.empresas.find((e) => e.id === "rose")?.diasCertificado).toBeGreaterThan(3000);
+    expect((await req("GET", "/v1/admin/monitor")).status).toBe(401);
+  });
+
+  it("avisa certificado vencendo uma vez e silencia por 6 horas", async () => {
+    // O certificado de teste vale até 01/01/2036: 20 dias antes, aviso
+    const quase = new Date("2035-12-12T12:00:00Z");
+    alertasRecebidos.length = 0;
+    await executarRotinas({ agora: quase });
+    const cert = alertasRecebidos.filter((a) => a.chave === "rose:certificado-vencendo");
+    expect(cert).toHaveLength(1);
+    expect(cert[0]).toMatchObject({ gravidade: "aviso" });
+    expect(cert[0]?.mensagem).toContain("vence em 19 dia(s)");
+    await ctx.webhooks.aguardar();
+    expect(recebidos.map((x) => JSON.parse(x.corpo).tipo)).toContain("alerta");
+
+    alertasRecebidos.length = 0;
+    await executarRotinas({ agora: new Date(quase.getTime() + 20 * 60_000) });
+    expect(alertasRecebidos.filter((a) => a.chave === "rose:certificado-vencendo")).toHaveLength(0);
+    await executarRotinas({ agora: new Date(quase.getTime() + 7 * 3_600_000) });
+    expect(alertasRecebidos.filter((a) => a.chave === "rose:certificado-vencendo")).toHaveLength(1);
   });
 });

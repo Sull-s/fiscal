@@ -16,6 +16,7 @@ FISCAL_CHAVE_MESTRA=... FISCAL_TOKEN_ADMIN=... node apps/api/dist/principal.js
 | `FISCAL_TOKEN_ADMIN` | Token das rotas `/v1/admin`. Sem ele, a administração fica desligada. |
 | `FISCAL_BANCO_URL` | Postgres (Supabase, Neon…). Com ela, numeração, XMLs, PDFs e cadastro ficam no banco (tabelas `fiscal_*`, criadas sozinhas) e a pasta não é usada. Recomendado em produção: sem limite de operações como os storages de arquivo. |
 | `FISCAL_PASTA_DADOS` | Pasta de dados (padrão `./dados`): `arquivos/` (XML, PDF, cadastro, índice) e `numeracao/` (PostgreSQL embutido). Faça backup dela. |
+| `FISCAL_ALERTA_URL` | Webhook para alertas (Slack, Discord…; recebe `{ text, content }`): certificado vencendo/vencido, SEFAZ fora, nota pendente há mais de 30 min, offline há mais de 6 h, relógio errado, webhooks não entregues. Cada alerta repete no máximo a cada 6 h. |
 | `PORTA` | Padrão 8787. |
 
 ## Primeiros passos (administrador)
@@ -104,6 +105,13 @@ function webhookValido(segredo, corpo, cabecalho) {
 O servidor roda a cada minuto, sozinho: transmite NFC-e offline quando a SEFAZ volta, resolve NFC-e
 e NFS-e pendentes (consulta pela chave / Id da DPS, depois de 1 minuto) e reenvia webhooks. Quem
 usa a API como biblioteca chama `criarServico(deps).executarRotinas()`.
+
+## Monitoramento
+
+`GET /v1/admin/monitor` (token do administrador) mostra a situação de todas as empresas e os
+alertas abertos; `?sefaz=1` também consulta a SEFAZ na hora. A cada 15 minutos a API avalia sozinha
+e manda os alertas novos para `FISCAL_ALERTA_URL` e, os de cada empresa, para o webhook dela
+(evento `alerta`).
 
 ## Contingência SVC da NF-e
 

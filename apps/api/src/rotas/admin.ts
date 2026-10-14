@@ -8,6 +8,7 @@ import { Hono } from "hono";
 import type { Contexto } from "../contexto";
 import { type Empresa, empresaPublica, gerarChaveApi, validarIdEmpresa } from "../empresas";
 import { falhar, lerCorpo } from "../http";
+import { avaliarMonitor } from "../monitor";
 
 /** Cadastro de empresas, certificados e chaves de API. Protegido pelo token de administrador. */
 export function rotasAdmin(ctx: Contexto) {
@@ -18,6 +19,11 @@ export function rotasAdmin(ctx: Contexto) {
     const empresa = await empresas.obter(validarIdEmpresa(id));
     return empresa ?? falhar(404, "EMPRESA_NAO_ENCONTRADA", `Empresa ${id} não cadastrada.`);
   };
+
+  /** Alertas e situação de todas as empresas (?sefaz=1 também consulta a SEFAZ agora). */
+  app.get("/monitor", async (c) =>
+    c.json(await avaliarMonitor(ctx, { consultarSefaz: c.req.query("sefaz") === "1" })),
+  );
 
   app.get("/empresas", async (c) => c.json((await empresas.listar()).map(empresaPublica)));
 
