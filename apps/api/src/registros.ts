@@ -77,6 +77,8 @@ export function criarRegistros(armazem: ArmazemArquivos, opcoes: OpcoesRegistros
   const marcas = (empresa: string, modelo: string, ambiente: number, situacao: string) =>
     `_abertas/${empresa}/${modelo}/${ambiente}/${situacao}/`;
   const segura = (id: string) => id.replace(/[^0-9A-Za-z_-]/g, "");
+  const mes = (empresa: string, ambiente: number, anoMes: string) =>
+    `_mes/${empresa}/${ambiente}/${anoMes}/`;
 
   return {
     async salvar(empresa: string, registro: RegistroNota) {
@@ -89,6 +91,14 @@ export function criarRegistros(armazem: ArmazemArquivos, opcoes: OpcoesRegistros
         await armazem.gravar(
           `${b}/chave-${segura(registro.chave)}.json`,
           json({ id: registro.id }),
+          "application/json",
+        );
+      }
+      // Índice do mês da emissão (relatório do contador sem varrer todas as notas)
+      if (anterior === null) {
+        await armazem.gravar(
+          `${mes(empresa, registro.ambiente, registro.dataEmissao.slice(0, 7))}${registro.modelo}-${segura(registro.id)}`,
+          json({ modelo: registro.modelo, id: registro.id }),
           "application/json",
         );
       }
@@ -130,6 +140,17 @@ export function criarRegistros(armazem: ArmazemArquivos, opcoes: OpcoesRegistros
       }
       const ordem = (id: string) => (modelo !== "nfse" ? id.slice(2, 6) + id.slice(22, 34) : id);
       return ids.sort((a, b) => ordem(a).localeCompare(ordem(b)));
+    },
+
+    /** Todas as notas emitidas no mês (AAAA-MM), de todos os modelos. */
+    async listarDoMes(empresa: string, ambiente: number, anoMes: string) {
+      const notas: RegistroNota[] = [];
+      for (const caminho of await armazem.listar(mes(empresa, ambiente, anoMes))) {
+        const ref = await ler<{ modelo: ModeloRegistro; id: string }>(armazem, caminho);
+        const r = ref && (await this.obter(empresa, ref.modelo, ambiente, ref.id));
+        if (r) notas.push(r);
+      }
+      return notas;
     },
 
     /** Resposta guardada para um Idempotency-Key (repetir o pedido devolve a mesma coisa). */

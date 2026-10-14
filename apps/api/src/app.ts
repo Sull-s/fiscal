@@ -1,4 +1,5 @@
 import { situacaoCertificado } from "@fiscal/certificado";
+import { gerarRelatorioNotas, resumirNotas } from "@fiscal/documentos";
 import { Hono } from "hono";
 import { bearerAuth } from "hono/bearer-auth";
 import { hashToken, hashesIguais } from "./cofre";
@@ -110,6 +111,42 @@ function montarApp(deps: DependenciasApi, ctx: ReturnType<typeof criarContexto>)
         serie,
       }),
     );
+  });
+
+  /**
+   * Relatório do mês para o contador: PDF com resumo por modelo/situação e lista das notas.
+   * ?ambiente=2 para homologação; ?formato=json devolve os mesmos dados.
+   */
+  app.get("/v1/relatorios/:ano/:mes", async (c) => {
+    const empresa = c.get("empresa");
+    const ano = Number(c.req.param("ano"));
+    const mes = Number(c.req.param("mes").replace(/\.pdf$/, ""));
+    if (!(ano >= 2000 && mes >= 1 && mes <= 12))
+      falhar(400, "PERIODO_INVALIDO", "Use /v1/relatorios/AAAA/MM.");
+    const ambiente = c.req.query("ambiente") === "2" ? 2 : 1;
+    const periodo = `${ano}-${String(mes).padStart(2, "0")}`;
+    const notas = (await ctx.registros.listarDoMes(empresa.id, ambiente, periodo)).map((r) => ({
+      modelo: r.modelo,
+      serie: r.serie,
+      numero: r.numero,
+      dataEmissao: r.dataEmissao,
+      ...(r.chave ? { chave: r.chave } : {}),
+      situacao: r.situacao,
+      valor: r.valorTotal ?? 0,
+    }));
+    if (c.req.query("formato") === "json") {
+      return c.json({ periodo, ambiente, ...resumirNotas(notas), notas });
+    }
+    const pdf = await gerarRelatorioNotas({
+      empresa: { nome: empresa.nome, cnpj: empresa.cnpj },
+      periodo,
+      ambiente,
+      notas,
+    });
+    return c.body(new Uint8Array(pdf), 200, {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `inline; filename="notas-${empresa.cnpj.replace(/\D/g, "")}-${periodo}.pdf"`,
+    });
   });
 
   /** ZIP do mês para o contador. ?ambiente=2 para homologação; ?pdf=1 inclui PDFs. */

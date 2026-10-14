@@ -480,6 +480,35 @@ describe("NFS-e pela API", () => {
   });
 });
 
+describe("relatório do contador", () => {
+  it("resume as notas do mês (JSON) e gera o PDF", async () => {
+    const agora = new Date();
+    const caminho = `/v1/relatorios/${agora.getFullYear()}/${agora.getMonth() + 1}?ambiente=2`;
+    const r = (await (await req("GET", `${caminho}&formato=json`, chaveApi)).json()) as {
+      faturamento: number;
+      grupos: { modelo: string; situacao: string; quantidade: number }[];
+      notas: unknown[];
+    };
+    expect(r.notas.length).toBeGreaterThan(3);
+    expect(r.grupos).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ modelo: "65", situacao: "autorizada" }),
+        // a cancelada pelo usuário e a tentativa substituída na contingência
+        expect.objectContaining({ modelo: "65", situacao: "cancelada", quantidade: 2 }),
+        expect.objectContaining({ modelo: "nfse" }),
+      ]),
+    );
+    expect(r.faturamento).toBeGreaterThan(0);
+    const pdf = await req("GET", caminho, chaveApi);
+    expect(pdf.headers.get("Content-Type")).toBe("application/pdf");
+    expect(
+      Buffer.from(await pdf.arrayBuffer())
+        .subarray(0, 5)
+        .toString(),
+    ).toBe("%PDF-");
+  });
+});
+
 describe("arquivos para o contador", () => {
   it("ZIP do mês com NFC-e, eventos e NFS-e da homologação", async () => {
     const agora = new Date();

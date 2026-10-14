@@ -55,6 +55,7 @@ curl -X POST localhost:8787/v1/admin/empresas/rose/chaves -H "Authorization: Bea
 | `GET /v1/nfse/{id}/xml` · `/danfse` | XML e PDF |
 | `POST /v1/nfse/{id}/cancelamento` | `{ motivo, codigoMotivo? }` |
 | `GET /v1/numeracao/{55\|65\|nfse}` | Próximo número, pendentes, liberados, lacunas |
+| `GET /v1/relatorios/{AAAA}/{MM}` | Relatório do contador em PDF: resumo por documento e situação, total autorizado e lista das notas (`?ambiente=2`, `?formato=json`) |
 | `GET /v1/arquivos/{AAAA}/{MM}` | ZIP do mês para o contador (`?ambiente=2`, `?pdf=1`) |
 
 ## Notas de fornecedores (DF-e)
