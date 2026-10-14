@@ -1,9 +1,14 @@
 import { mkdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { PGlite } from "@electric-sql/pglite";
-import { armazemDisco } from "@fiscal/armazenamento";
+import {
+  type ArmazemArquivos,
+  armazemDisco,
+  armazemPostgres as arquivosPostgres,
+} from "@fiscal/armazenamento";
 import { armazemPostgres, prepararTabelas } from "@fiscal/numeracao";
 import { serve } from "@hono/node-server";
+import pg from "pg";
 import { criarServico } from "./app";
 import { criarCofre, gerarChaveMestra } from "./cofre";
 import { repositorioEmpresasEmArquivos } from "./empresas";
@@ -13,6 +18,8 @@ import { repositorioEmpresasEmArquivos } from "./empresas";
  *   FISCAL_CHAVE_MESTRA   32 bytes em base64 (cifra certificados). OBRIGATÓRIA. Guarde fora do servidor também:
  *                         sem ela, os certificados cadastrados não abrem mais.
  *   FISCAL_TOKEN_ADMIN    token para /v1/admin (cadastro de empresas). Sem ele, admin desligado.
+ *   FISCAL_BANCO_URL      Postgres (Supabase, Neon…): numeração, XMLs, PDFs e cadastro ficam no banco.
+ *                         Sem ela, tudo fica na pasta FISCAL_PASTA_DADOS.
  *   FISCAL_PASTA_DADOS    pasta de XMLs, PDFs, cadastro e numeração (padrão ./dados)
  *   PORTA                 padrão 8787
  */
@@ -23,15 +30,25 @@ if (!chaveMestra) {
   process.exit(1);
 }
 
+const urlBanco = process.env.FISCAL_BANCO_URL;
 const pasta = resolve(process.env.FISCAL_PASTA_DADOS ?? "dados");
-mkdirSync(join(pasta, "numeracao"), { recursive: true });
-
-// Numeração em PostgreSQL embutido (PGlite gravando na pasta): atômico, sem servidor de banco
-const banco = new PGlite(join(pasta, "numeracao"));
-const executar = (sql: string, p: unknown[]) => banco.query<Record<string, unknown>>(sql, p);
+let executar: (sql: string, p: unknown[]) => Promise<{ rows: Record<string, unknown>[] }>;
+let arquivos: ArmazemArquivos;
+if (urlBanco) {
+  // Postgres de verdade: várias instâncias da API podem dividir o mesmo banco
+  const pool = new pg.Pool({ connectionString: urlBanco, max: 5 });
+  executar = (sql, p) => pool.query(sql, p);
+  arquivos = arquivosPostgres({ executar });
+  console.log("Dados no Postgres (FISCAL_BANCO_URL).");
+} else {
+  // PostgreSQL embutido (PGlite gravando na pasta) para a numeração: atômico, sem servidor de banco
+  mkdirSync(join(pasta, "numeracao"), { recursive: true });
+  const banco = new PGlite(join(pasta, "numeracao"));
+  executar = (sql, p) => banco.query<Record<string, unknown>>(sql, p);
+  arquivos = armazemDisco(join(pasta, "arquivos"));
+}
 await prepararTabelas({ executar });
 
-const arquivos = armazemDisco(join(pasta, "arquivos"));
 const { app, executarRotinas } = criarServico({
   cofre: criarCofre(chaveMestra),
   empresas: repositorioEmpresasEmArquivos(arquivos),
@@ -43,7 +60,9 @@ const { app, executarRotinas } = criarServico({
 
 const porta = Number(process.env.PORTA ?? 8787);
 serve({ fetch: app.fetch, port: porta }, () => {
-  console.log(`@fiscal/api ouvindo em http://localhost:${porta} (dados em ${pasta})`);
+  console.log(
+    `@fiscal/api ouvindo em http://localhost:${porta}${urlBanco ? "" : ` (dados em ${pasta})`}`,
+  );
 });
 
 // Rotinas a cada minuto: transmite NFC-e offline, resolve pendentes e reenvia webhooks.

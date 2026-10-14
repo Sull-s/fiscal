@@ -14,6 +14,7 @@ FISCAL_CHAVE_MESTRA=... FISCAL_TOKEN_ADMIN=... node apps/api/dist/principal.js
 |---|---|
 | `FISCAL_CHAVE_MESTRA` | **Obrigatória.** 32 bytes em base64; cifra certificados e senhas (AES-256-GCM). Rode sem ela uma vez e o serviço sugere uma. **Guarde uma cópia fora do servidor**: sem ela os certificados cadastrados não abrem. |
 | `FISCAL_TOKEN_ADMIN` | Token das rotas `/v1/admin`. Sem ele, a administração fica desligada. |
+| `FISCAL_BANCO_URL` | Postgres (Supabase, Neon…). Com ela, numeração, XMLs, PDFs e cadastro ficam no banco (tabelas `fiscal_*`, criadas sozinhas) e a pasta não é usada. Recomendado em produção: sem limite de operações como os storages de arquivo. |
 | `FISCAL_PASTA_DADOS` | Pasta de dados (padrão `./dados`): `arquivos/` (XML, PDF, cadastro, índice) e `numeracao/` (PostgreSQL embutido). Faça backup dela. |
 | `PORTA` | Padrão 8787. |
 

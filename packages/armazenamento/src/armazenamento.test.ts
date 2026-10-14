@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { PGlite } from "@electric-sql/pglite";
 import { ErroFiscal } from "@fiscal/core";
 import { strFromU8, unzipSync } from "fflate";
 import { afterAll, describe, expect, it } from "vitest";
@@ -12,6 +13,11 @@ import {
   armazemFuncoes,
 } from "./armazens";
 import { criarArquivoFiscal } from "./arquivo-fiscal";
+import { armazemPostgres } from "./postgres";
+
+// Um Postgres de verdade (PGlite) para todos os testes; cada armazém usa a própria tabela
+const banco = new PGlite();
+let tabelas = 0;
 
 const pastas: string[] = [];
 afterAll(() => {
@@ -34,6 +40,14 @@ const armazens: [string, () => ArmazemArquivos][] = [
       const m = armazemArquivosEmMemoria();
       return armazemFuncoes({ gravar: m.gravar, ler: m.ler, listar: m.listar });
     },
+  ],
+  [
+    "postgres",
+    () =>
+      armazemPostgres({
+        executar: (sql, p) => banco.query(sql, p),
+        tabela: `arquivos_${++tabelas}`,
+      }),
   ],
 ];
 
@@ -130,5 +144,23 @@ describe("arquivo fiscal", () => {
         f.endsWith(".tmp"),
       ),
     ).toBe(false);
+  });
+});
+
+describe("armazém Postgres", () => {
+  it("guarda bytes exatos (PDF binário) e não confunde % e _ do prefixo com curingas", async () => {
+    const a = armazemPostgres({ executar: (sql, p) => banco.query(sql, p), tabela: "binarios" });
+    const pdf = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x00, 0xff, 0x80, 0x0a]);
+    await a.gravar("a_b/1.pdf", pdf, "application/pdf");
+    await a.gravar("axb/2.pdf", pdf, "application/pdf");
+    expect(await a.ler("a_b/1.pdf")).toEqual(pdf);
+    expect(await a.listar("a_b/")).toEqual(["a_b/1.pdf"]);
+    expect(await a.listar("a%")).toEqual([]);
+  });
+
+  it("recusa nome de tabela perigoso", () => {
+    expect(() =>
+      armazemPostgres({ executar: (sql, p) => banco.query(sql, p), tabela: "x; drop table y" }),
+    ).toThrow("Nome de tabela inválido");
   });
 });

@@ -12,3 +12,4 @@ export {
   type TipoArquivo,
   criarArquivoFiscal,
 } from "./arquivo-fiscal";
+export { type ExecutarSql, armazemPostgres, sqlTabelaArquivos } from "./postgres";
