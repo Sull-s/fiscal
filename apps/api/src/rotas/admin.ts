@@ -145,10 +145,12 @@ function lerSerie(empresa: string, dados: Record<string, unknown>): Serie {
   const modelo = String(dados.modelo ?? "65");
   const ambiente = Number(dados.ambiente ?? 1);
   const serie = String(dados.serie ?? "1");
-  if (modelo !== "65" && modelo !== "55")
-    falhar(400, "MODELO_INVALIDO", "modelo deve ser 65 ou 55.");
+  if (modelo !== "65" && modelo !== "55" && modelo !== "nfse")
+    falhar(400, "MODELO_INVALIDO", "modelo deve ser 65, 55 ou nfse.");
   if (ambiente !== 1 && ambiente !== 2)
     falhar(400, "AMBIENTE_INVALIDO", "ambiente deve ser 1 ou 2.");
-  if (!/^\d{1,3}$/.test(serie)) falhar(400, "SERIE_INVALIDA", "serie deve ter de 1 a 3 dígitos.");
+  // Série da DPS (NFS-e) tem até 5 dígitos; NF-e e NFC-e, até 3
+  if (!(modelo === "nfse" ? /^\d{1,5}$/ : /^\d{1,3}$/).test(serie))
+    falhar(400, "SERIE_INVALIDA", "serie inválida (1 a 3 dígitos; NFS-e até 5).");
   return { empresa, modelo, ambiente: ambiente as 1 | 2, serie };
 }

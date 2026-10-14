@@ -17,6 +17,8 @@ const TESTES = join(import.meta.dirname, "..", "testes");
 const PFX = readFileSync(join(TESTES, "certificado-teste.pfx")).toString("base64");
 const NFSE_REAL = readFileSync(join(TESTES, "nfse-autorizada.xml"), "utf8");
 const CHAVE_NFSE = "43149022210440532000101000000000000126089303229430";
+/** NFS-e da empresa de teste (CNPJ 48618635000183) emitida por outro sistema */
+const CHAVE_OUTRO_SISTEMA = `4314902${"22"}48618635000183${"0000000000777"}2610${"123456789"}0`;
 const ADMIN = "token-admin-de-teste-bem-comprido";
 const NS = 'xmlns="http://www.portalfiscal.inf.br/nfe"';
 
@@ -165,6 +167,12 @@ const { app, executarRotinas, ctx } = criarServico({
               chaveAcesso: CHAVE_NFSE,
               nfseXmlGZipB64: gzipSync(NFSE_REAL).toString("base64"),
             }),
+          };
+        }
+        if (p.metodo === "GET" && p.url.endsWith(`/nfse/${CHAVE_OUTRO_SISTEMA}`)) {
+          return {
+            statusHttp: 200,
+            corpo: JSON.stringify({ nfseXmlGZipB64: gzipSync(NFSE_REAL).toString("base64") }),
           };
         }
         if (p.url.endsWith("/eventos"))
@@ -999,5 +1007,40 @@ describe("tela de testes", () => {
       await req("GET", `/v1/nfse/${((await r.json()) as { id: string }).id}/xml`, chaveApi)
     ).text();
     expect(xml.length).toBeGreaterThan(100);
+  });
+});
+
+describe("migração de outro emissor de NFS-e", () => {
+  it("consulta e cancela pela chave uma NFS-e emitida por outro sistema", async () => {
+    expect(CHAVE_OUTRO_SISTEMA).toHaveLength(50);
+    const r = await req("GET", `/v1/nfse/${CHAVE_OUTRO_SISTEMA}`, chaveApi);
+    expect(r.status).toBe(200);
+    expect(await r.json()).toMatchObject({
+      situacao: "autorizada",
+      chave: CHAVE_OUTRO_SISTEMA,
+      referencia: "importada de outro sistema",
+    });
+    const pdf = await req("GET", `/v1/nfse/${CHAVE_OUTRO_SISTEMA}/danfse`, chaveApi);
+    expect(pdf.headers.get("Content-Type")).toBe("application/pdf");
+    const cancelada = await req("POST", `/v1/nfse/${CHAVE_OUTRO_SISTEMA}/cancelamento`, chaveApi, {
+      motivo: "Emitida em duplicidade",
+    });
+    expect(((await cancelada.json()) as { situacao: string }).situacao).toBe("cancelada");
+  });
+
+  it("chave de outra empresa continua 404", async () => {
+    const outra = `4314902${"22"}10440532000101${"0000000000888"}2610${"123456789"}0`;
+    expect((await req("GET", `/v1/nfse/${outra}`, chaveApi)).status).toBe(404);
+  });
+
+  it("numeração da NFS-e continua a do sistema anterior", async () => {
+    const r = await req("POST", "/v1/admin/empresas/rose/numeracao/iniciar", ADMIN, {
+      modelo: "nfse",
+      ambiente: 1,
+      serie: "1",
+      primeiroNumero: 50,
+    });
+    expect(r.status).toBe(200);
+    expect(((await r.json()) as { proximo: number }).proximo).toBe(50);
   });
 });

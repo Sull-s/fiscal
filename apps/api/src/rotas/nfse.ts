@@ -5,7 +5,9 @@ import {
   type Tomador,
   type Valores,
   cancelarNfse,
+  decomporChaveNfse,
   emitirNfse,
+  lerNfse,
 } from "@fiscal/nfse-nacional";
 import type { Serie } from "@fiscal/numeracao";
 import { type Context, Hono } from "hono";
@@ -137,11 +139,48 @@ export function rotasNfse() {
     return c.json(resposta, status);
   });
 
+  /**
+   * NFS-e da empresa emitida por OUTRO sistema (ex.: antes da migração): pela chave, busca no
+   * Sistema Nacional e passa a tratar como nossa (consulta, PDF, cancelamento). Não mexe na
+   * numeração: o número foi dado pelo outro sistema.
+   */
+  const importarDeOutroSistema = async (c: Context<Ambiente>, chave: string) => {
+    if (!/^\d{50}$/.test(chave)) return null;
+    const empresa = c.get("empresa");
+    const ctx = c.get("ctx");
+    const documentoEmpresa = config(c).prestador.documento.replace(/\D/g, "");
+    if (decomporChaveNfse(chave).documentoEmitente !== documentoEmpresa.padStart(14, "0"))
+      return null;
+    const consulta = await ctx.nfse(empresa).consultarNfse(chave);
+    if (!consulta.xmlNfse) return null;
+    const resumo = lerNfse(consulta.xmlNfse);
+    const agora = new Date().toISOString();
+    const r: RegistroNota = {
+      id: resumo.dps.id || chave,
+      modelo: MODELO,
+      ambiente: empresa.ambiente,
+      numero: Number(resumo.dps.numero) || 0,
+      serie: resumo.dps.serie,
+      dataEmissao: resumo.dps.dataEmissao || resumo.dataProcessamento,
+      situacao: "autorizada",
+      chave,
+      valorTotal: Number(resumo.valores.liquido || resumo.valores.servico),
+      referencia: "importada de outro sistema",
+      criadaEm: agora,
+      atualizadaEm: agora,
+    };
+    Object.assign(r, { numeroNfse: resumo.numero });
+    await ctx.arquivoFiscal.guardar(documento(empresa, r), "nota", consulta.xmlNfse);
+    await ctx.registros.salvar(empresa.id, r);
+    return r;
+  };
+
   const obterRegistro = async (c: Context<Ambiente>) => {
     const empresa = c.get("empresa");
-    const r = await c
-      .get("ctx")
-      .registros.obter(empresa.id, MODELO, empresa.ambiente, c.req.param("id") ?? "");
+    const id = c.req.param("id") ?? "";
+    const r =
+      (await c.get("ctx").registros.obter(empresa.id, MODELO, empresa.ambiente, id)) ??
+      (await importarDeOutroSistema(c, id));
     return (
       r ??
       falhar(
