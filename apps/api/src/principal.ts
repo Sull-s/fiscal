@@ -80,7 +80,8 @@ const { app, executarRotinas } = criarServico({
   ...(process.env.FISCAL_ALERTA_URL
     ? { enviarAlertas: alertasPorUrl(process.env.FISCAL_ALERTA_URL) }
     : {}),
-  ...(pastaBackup ? { saude: () => ({ backup: { pasta: pastaBackup, ...backup } }) } : {}),
+  // Sem o caminho da pasta: /saude pode estar aberta na internet (túnel)
+  ...(pastaBackup ? { saude: () => ({ backup: { ...backup } }) } : {}),
 });
 
 const porta = Number(process.env.PORTA ?? 8787);
