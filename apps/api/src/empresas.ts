@@ -3,7 +3,7 @@ import type { ArmazemArquivos } from "@fiscal/armazenamento";
 import { ErroFiscal } from "@fiscal/core";
 import type { EmitenteNfce } from "@fiscal/nfce";
 import type { EmitenteNfe } from "@fiscal/nfe";
-import type { Prestador } from "@fiscal/nfse-nacional";
+import type { Prestador, Servico } from "@fiscal/nfse-nacional";
 import { hashToken, hashesIguais } from "./cofre";
 
 export interface Empresa {
@@ -23,7 +23,16 @@ export interface Empresa {
      */
     contingenciaOffline?: boolean;
   };
-  nfse?: { prestador: Prestador; serie: string; versaoAplicativo?: string };
+  nfse?: {
+    prestador: Prestador;
+    serie: string;
+    versaoAplicativo?: string;
+    /**
+     * Campos do serviço que quase nunca mudam (códigos de tributação, NBS, local): quem emite
+     * manda só o que falta, em geral a descrição
+     */
+    servicoPadrao?: Partial<Servico>;
+  };
   nfe?: {
     emitente: EmitenteNfe;
     serie: string;

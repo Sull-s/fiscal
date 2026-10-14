@@ -946,3 +946,58 @@ describe("monitoramento", () => {
     expect(alertasRecebidos.filter((a) => a.chave === "rose:certificado-vencendo")).toHaveLength(1);
   });
 });
+
+describe("tela de testes", () => {
+  it("a página abre com a mesma proteção do painel", async () => {
+    const r = await req("GET", "/painel/testes");
+    expect(r.status).toBe(200);
+    expect(r.headers.get("Content-Security-Policy")).toContain("default-src 'none'");
+    expect(await r.text()).toContain("Testar notas fiscais");
+  });
+
+  it("Fiscal-Ambiente: 2 testa em homologação com a empresa em produção; nunca sobe para produção", async () => {
+    // Empresa em homologação não pode ser levada para produção pelo cabeçalho
+    const subir = await req("GET", "/v1/empresa", chaveApi, undefined, { "Fiscal-Ambiente": "1" });
+    expect(subir.status).toBe(400);
+
+    await req("PUT", "/v1/admin/empresas/rose", ADMIN, { ambiente: 1 });
+    try {
+      const teste = await req("POST", "/v1/nfce", chaveApi, { venda }, { "Fiscal-Ambiente": "2" });
+      expect(teste.status).toBe(201);
+      const { chave } = (await teste.json()) as { chave: string };
+      // tpAmb 2 na chave? Não: a chave não tem ambiente; o registro fica na homologação
+      const comCabecalho = await req("GET", `/v1/nfce/${chave}`, chaveApi, undefined, {
+        "Fiscal-Ambiente": "2",
+      });
+      expect(((await comCabecalho.json()) as { ambiente: number }).ambiente).toBe(2);
+      expect((await req("GET", `/v1/nfce/${chave}`, chaveApi)).status).toBe(404);
+      const xml = await (
+        await req("GET", `/v1/nfce/${chave}/xml`, chaveApi, undefined, { "Fiscal-Ambiente": "2" })
+      ).text();
+      expect(xml).toContain("<tpAmb>2</tpAmb>");
+    } finally {
+      await req("PUT", "/v1/admin/empresas/rose", ADMIN, { ambiente: 2 });
+    }
+  });
+
+  it("NFS-e completa o serviço com o servicoPadrao do cadastro", async () => {
+    const empresa = (await (await req("GET", "/v1/admin/empresas/rose", ADMIN)).json()) as {
+      nfse: Record<string, unknown>;
+    };
+    await req("PUT", "/v1/admin/empresas/rose", ADMIN, {
+      nfse: {
+        ...empresa.nfse,
+        servicoPadrao: { codigoMunicipioPrestacao: "4314902", codigoTributacaoNacional: "090201" },
+      },
+    });
+    const r = await req("POST", "/v1/nfse", chaveApi, {
+      servico: { descricao: "Só a descrição" },
+      valores: { valorServico: 10 },
+    });
+    expect(r.status).toBe(201);
+    const xml = await (
+      await req("GET", `/v1/nfse/${((await r.json()) as { id: string }).id}/xml`, chaveApi)
+    ).text();
+    expect(xml.length).toBeGreaterThan(100);
+  });
+});

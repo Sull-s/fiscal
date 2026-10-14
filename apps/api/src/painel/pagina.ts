@@ -34,7 +34,7 @@ label{display:block;font-size:12px;color:var(--suave);margin:10px 0 4px}
 </style>
 </head>
 <body>
-<header><h1>Painel fiscal</h1><div><span id="ambienteApi" class="suave"></span> <button id="sair" class="oculto">Sair</button></div></header>
+<header><h1>Painel fiscal</h1><div><a href="/painel/testes" style="color:var(--destaque);margin-right:10px">Testar notas</a><span id="ambienteApi" class="suave"></span> <button id="sair" class="oculto">Sair</button></div></header>
 <main>
   <section id="entrar" class="cartao" style="max-width:420px;margin:60px auto">
     <h2>Entrar</h2>

@@ -8,6 +8,7 @@ import { type DependenciasApi, criarContexto } from "./contexto";
 import { autenticarChaveApi, empresaPublica } from "./empresas";
 import { type Ambiente, falhar, lerCorpo, responderErro } from "./http";
 import { PAGINA_PAINEL } from "./painel/pagina";
+import { PAGINA_TESTES } from "./painel/testes";
 import { rotasAdmin } from "./rotas/admin";
 import { rotasDfe } from "./rotas/dfe";
 import { rotasNfce } from "./rotas/nfce";
@@ -74,7 +75,7 @@ function montarApp(deps: DependenciasApi, ctx: ReturnType<typeof criarContexto>)
       "/v1/*",
       cors({
         origin: (origem) => (permitida(origem) ? origem : null),
-        allowHeaders: ["Authorization", "Content-Type", "Idempotency-Key"],
+        allowHeaders: ["Authorization", "Content-Type", "Idempotency-Key", "Fiscal-Ambiente"],
         allowMethods: ["GET", "POST", "PUT", "DELETE"],
         maxAge: 600,
       }),
@@ -94,14 +95,15 @@ function montarApp(deps: DependenciasApi, ctx: ReturnType<typeof criarContexto>)
   );
 
   /** Painel do administrador (a página em si é pública; os dados exigem o token). */
-  app.get("/painel", (c) =>
-    c.html(PAGINA_PAINEL, 200, {
-      "Content-Security-Policy":
-        "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
-      "Cache-Control": "no-store",
-      "Referrer-Policy": "no-referrer",
-    }),
-  );
+  const cabecalhosPainel = {
+    "Content-Security-Policy":
+      "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+    "Cache-Control": "no-store",
+    "Referrer-Policy": "no-referrer",
+  };
+  app.get("/painel", (c) => c.html(PAGINA_PAINEL, 200, cabecalhosPainel));
+  /** Tela de testes: emite e cancela todas as notas (homologação por padrão). Dados exigem o token. */
+  app.get("/painel/testes", (c) => c.html(PAGINA_TESTES, 200, cabecalhosPainel));
 
   // ---- Administração
   if (deps.tokenAdmin) {
@@ -119,7 +121,12 @@ function montarApp(deps: DependenciasApi, ctx: ReturnType<typeof criarContexto>)
     const token = /^Bearer (.+)$/.exec(c.req.header("Authorization") ?? "")?.[1] ?? "";
     const empresa = await autenticarChaveApi(deps.empresas, token);
     if (!empresa) falhar(401, "NAO_AUTORIZADO", "Chave de API ausente ou inválida.");
-    c.set("empresa", empresa);
+    // "Fiscal-Ambiente: 2" testa em homologação mesmo com a empresa em produção (tela de testes).
+    // Só rebaixa: nunca leva para produção uma empresa cadastrada em homologação.
+    const pedido = c.req.header("Fiscal-Ambiente");
+    if (pedido !== undefined && pedido !== "2" && pedido !== String(empresa.ambiente))
+      falhar(400, "AMBIENTE_INVALIDO", "Fiscal-Ambiente só aceita 2 (homologação).");
+    c.set("empresa", pedido === "2" ? { ...empresa, ambiente: 2 } : empresa);
     c.set("ctx", ctx);
     await next();
   });

@@ -40,7 +40,8 @@ export function criarContexto(deps: DependenciasApi) {
     marca: string;
     certificado: CertificadoA1;
     sefaz?: ClienteSefaz;
-    nfse?: ClienteNfse;
+    /** Um cliente por ambiente: a mesma empresa pode testar em homologação estando em produção */
+    nfse?: Partial<Record<1 | 2, ClienteNfse>>;
   }
   const cache = new Map<string, EntradaCache>();
   const numeracao = criarNumeracao(deps.numeracao);
@@ -75,7 +76,7 @@ export function criarContexto(deps: DependenciasApi) {
     const atual = cache.get(empresa.id);
     if (atual?.marca === marca) return atual;
     atual?.sefaz?.fechar();
-    atual?.nfse?.fechar();
+    for (const n of Object.values(atual?.nfse ?? {})) n.fechar();
     const certificado = abrirCertificadoA1(
       deps.cofre.decifrar(cert.pfx, empresa.id),
       deps.cofre.decifrar(cert.senha, empresa.id).toString("utf8"),
@@ -103,20 +104,24 @@ export function criarContexto(deps: DependenciasApi) {
     },
     nfse(empresa: Empresa): ClienteNfse {
       const e = entrada(empresa);
-      e.nfse ??= deps.fabricaNfse
-        ? deps.fabricaNfse(e.certificado, empresa.ambiente)
-        : criarClienteNfse({
-            certificado: e.certificado,
-            ambiente: empresa.ambiente,
-            aoRegistrar: registrar(empresa.id),
-          });
-      return e.nfse;
+      e.nfse ??= {};
+      const cliente =
+        e.nfse[empresa.ambiente] ??
+        (deps.fabricaNfse
+          ? deps.fabricaNfse(e.certificado, empresa.ambiente)
+          : criarClienteNfse({
+              certificado: e.certificado,
+              ambiente: empresa.ambiente,
+              aoRegistrar: registrar(empresa.id),
+            }));
+      e.nfse[empresa.ambiente] = cliente;
+      return cliente;
     },
     /** Esquece o cache da empresa (ex.: certificado trocado) */
     esquecer(id: string) {
       const atual = cache.get(id);
       atual?.sefaz?.fechar();
-      atual?.nfse?.fechar();
+      for (const n of Object.values(atual?.nfse ?? {})) n.fechar();
       cache.delete(id);
     },
   };

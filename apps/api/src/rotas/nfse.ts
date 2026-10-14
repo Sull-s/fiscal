@@ -53,6 +53,7 @@ export function rotasNfse() {
     }>(c);
     if (!corpo.servico || !corpo.valores)
       falhar(400, "DADOS_OBRIGATORIOS", "Envie servico e valores.");
+    const servico = { ...nfse.servicoPadrao, ...corpo.servico } as Servico;
 
     const serie: Serie = {
       empresa: empresa.id,
@@ -68,7 +69,7 @@ export function rotasNfse() {
         certificado: ctx.certificado(empresa),
         prestador: nfse.prestador,
         ...(corpo.tomador ? { tomador: corpo.tomador } : {}),
-        servico: corpo.servico,
+        servico,
         valores: corpo.valores,
         dps: {
           ambiente: empresa.ambiente,
