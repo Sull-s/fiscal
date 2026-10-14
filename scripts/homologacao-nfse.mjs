@@ -5,6 +5,7 @@
 //   $env:FISCAL_PFX = "C:\caminho\certificado.pfx"
 //   $env:FISCAL_PFX_SENHA = "..."            # a senha fica só nesta janela do terminal
 //   node scripts/homologacao-nfse.mjs caminho\nfse.json [--sem-cancelar]
+//   node scripts/homologacao-nfse.mjs caminho\nfse.json --cancelar <chave>   (só cancela uma já emitida)
 //
 // nfse.json: { prestador, tomador?, servico } da empresa dona do certificado, ex.:
 //   { "prestador": { "documento": "...", "regime": { "opcaoSimples": 2, "regimeEspecial": 0 } },
@@ -51,7 +52,28 @@ const competencia = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Pa
   agora,
 );
 
+async function cancelar(chave) {
+  const cancelamento = await cancelarNfse({
+    cliente,
+    certificado,
+    chave,
+    ambiente: 2,
+    versaoAplicativo,
+    documentoAutor: dados.prestador.documento,
+    motivo: "Teste de homologacao do pacote fiscal",
+    codigoMotivo: 1,
+  });
+  const { xmlPedidoAssinado, ...resumo } = cancelamento;
+  console.log("Cancelamento:", resumo);
+}
+
 try {
+  const pedido = opcoes.indexOf("--cancelar");
+  if (pedido >= 0) {
+    await cancelar(opcoes[pedido + 1]);
+    process.exit(0);
+  }
+
   // Número aleatório alto numa série só de testes (900) para não colidir com testes anteriores
   const emissao = await emitirNfse({
     cliente,
@@ -83,18 +105,11 @@ try {
   console.log("Consulta:", consulta.xmlNfse ? "NFS-e encontrada" : consulta);
 
   if (!opcoes.includes("--sem-cancelar")) {
-    const cancelamento = await cancelarNfse({
-      cliente,
-      certificado,
-      chave: emissao.chave,
-      ambiente: 2,
-      versaoAplicativo,
-      documentoAutor: dados.prestador.documento,
-      motivo: "Teste de homologacao do pacote fiscal",
-      codigoMotivo: 1,
-    });
-    const { xmlPedidoAssinado, ...resumo } = cancelamento;
-    console.log("Cancelamento:", resumo);
+    // O evento sai com a hora 60 s atrasada (margem do relógio): cancelar logo em seguida daria
+    // um evento "antes" da própria nota
+    console.log("Esperando 90 s antes de cancelar…");
+    await new Promise((r) => setTimeout(r, 90_000));
+    await cancelar(emissao.chave);
   }
 } finally {
   cliente.fechar();
