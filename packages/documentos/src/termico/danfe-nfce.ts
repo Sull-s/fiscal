@@ -45,7 +45,15 @@ export interface DadosDanfeNfce {
     valorUnitario: number;
     valorTotal: number;
   }[];
-  totais: { produtos: number; desconto: number; acrescimos: number; aPagar: number; troco: number };
+  totais: {
+    produtos: number;
+    desconto: number;
+    acrescimos: number;
+    aPagar: number;
+    troco: number;
+    /** Lei 12.741/2012 (vTotTrib); 0 quando a nota não informa */
+    tributos: number;
+  };
   pagamentos: { forma: string; valor: number }[];
   consumidor?: { documento: string; nome: string; endereco: string };
   protocolo?: { numero: string; data: string };
@@ -127,6 +135,7 @@ export function lerDanfeNfce(xml: string): DadosDanfeNfce {
       acrescimos: n(tot.vOutro) + n(tot.vFrete) + n(tot.vSeg),
       aPagar: n(tot.vNF),
       troco: n(pag.vTroco),
+      tributos: n(tot.vTotTrib),
     },
     pagamentos: ((pag.detPag as No[] | undefined) ?? []).map((p) => ({
       forma: s(p.xPag) || FORMAS[s(p.tPag)] || "Outros",
@@ -217,6 +226,12 @@ export function montarDanfeNfce(
   add(colunas("FORMA DE PAGAMENTO", "VALOR PAGO R$", { negrito: true }));
   for (const p of d.pagamentos) add(colunas(p.forma, moeda(p.valor)));
   if (d.totais.troco > 0) add(colunas("Troco R$", moeda(d.totais.troco)));
+  // Lei 12.741/2012: valor aproximado dos tributos
+  if (d.totais.tributos > 0) {
+    add(
+      colunas("Tributos totais incidentes (Lei Federal 12.741/2012) R$", moeda(d.totais.tributos)),
+    );
+  }
   add(separador);
 
   // Divisão IV: consulta pela chave

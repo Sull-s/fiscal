@@ -69,4 +69,35 @@ describe("NFC-e no regime normal (CRT 3)", () => {
       expect((erro as ErroFiscal).message).toContain("CRT 3");
     }
   });
+
+  it("tributos aproximados e IBS/CBS no cupom; passa no XSD", async () => {
+    const e = entrada();
+    e.venda.itens = e.venda.itens.map((it) => ({
+      ...it,
+      tributacao: {
+        ...it.tributacao!,
+        ibsCbs: { cst: "000", classificacao: "000001" },
+        tributosAproximados: { federal: 10, estadual: 17 },
+      },
+    }));
+    const nota = montarNfce(e);
+    expect(nota.xml).toContain("<IBSCBSTot>");
+    expect(nota.xml).toContain("Trib aprox: R$ 11,00 Federal, R$ 18,70 Estadual");
+    expect(nota.valorTotal).toBe(110);
+    const assinado = assinarXml(nota.xml, { certificado, elemento: "infNFe", perfil: "sefaz" });
+    expect(
+      (await validarContraXsd(assinado, join(PASTA_FIXTURES, "xsd", "nfe_v4.00.xsd"))).erros,
+    ).toEqual([]);
+  });
+
+  it("NFC-e não calcula ST na nota nem tem DIFAL", () => {
+    const e = entrada();
+    e.venda.itens = [
+      {
+        ...e.venda.itens[0]!,
+        tributacao: { icms: { cst: "10", aliquota: 17, st: { mva: 40, aliquota: 17 } } },
+      },
+    ];
+    expect(() => montarNfce(e)).toThrow("NFC-e não calcula ST");
+  });
 });

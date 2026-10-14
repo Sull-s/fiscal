@@ -187,5 +187,18 @@ export interface NfeMontada {
   /** SVC usada, quando emitida em contingência */
   contingencia?: "SVC-AN" | "SVC-RS";
   /** Totais dos impostos destacados, em reais */
-  impostos: { icms: number; fcp: number; ipi: number; pis: number; cofins: number };
+  impostos: {
+    icms: number;
+    fcp: number;
+    /** ICMS-ST + FCP-ST cobrados nesta nota (somados ao total) */
+    st: number;
+    /** DIFAL + FCP do destino */
+    difal: number;
+    ipi: number;
+    pis: number;
+    cofins: number;
+    /** IBS + CBS (informativo em 2026) */
+    ibsCbs: number;
+    tributosAproximados: number;
+  };
 }

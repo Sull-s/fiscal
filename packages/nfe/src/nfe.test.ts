@@ -199,7 +199,14 @@ describe("montarNfe", () => {
     await passaNoXsd(n.xml);
     expect(n.xml).toContain("<idDest>2</idDest>");
     // Revenda para contribuinte: IPI fora da base do ICMS
-    expect(n.impostos).toEqual({ icms: 120, fcp: 0, ipi: 50, pis: 14.52, cofins: 66.88 });
+    expect(n.impostos).toMatchObject({
+      icms: 120,
+      fcp: 0,
+      ipi: 50,
+      pis: 14.52,
+      cofins: 66.88,
+      st: 0,
+    });
     expect(n.valorTotal).toBe(1050);
     expect(n.xml).toContain("<vIPI>50.00</vIPI><vIPIDevol>0.00</vIPIDevol><vPIS>14.52</vPIS>");
   });
@@ -438,5 +445,187 @@ describe("contingência SVC", () => {
     await expect(
       emitirNfe({ ...semOpcao, cliente, proximoNumero: async () => 1 }),
     ).rejects.toMatchObject({ codigo: "SEFAZ_SEM_CONEXAO" });
+  });
+});
+
+describe("ST, DIFAL, IBS/CBS e tributos aproximados", () => {
+  const item = (tributacao: object, cfop = "5102") => ({
+    codigo: "P1",
+    descricao: "Produto com ST",
+    ncm: "22021000",
+    cest: "0300700",
+    cfop,
+    quantidade: 10,
+    valorUnitario: 10,
+    tributacao: tributacao as never,
+  });
+  const montar = (emitente: EmitenteNfe, op: Partial<OperacaoNfe>, pago: number) =>
+    montarNfe({
+      emitente,
+      nota,
+      operacao: {
+        destinatario: lojaRs,
+        itens: [],
+        pagamentos: [{ forma: "pix", valor: pago, integrado: false }],
+        ...op,
+      } as OperacaoNfe,
+    });
+
+  it("CST 10: ICMS próprio + ST com MVA somada ao total; passa no XSD", async () => {
+    const n = montar(
+      emitenteNormal,
+      {
+        itens: [
+          item({
+            icms: { cst: "10", aliquota: 17, st: { mva: 40, aliquota: 17, aliquotaFcp: 2 } },
+          }),
+        ],
+      },
+      125.8,
+    );
+    // Base ST = 100 × 1,40 = 140; ST = 140 × 17% − 17 = 6,80; FCP-ST = 2,80
+    expect(n.xml).toContain(
+      "<modBCST>4</modBCST><pMVAST>40.0000</pMVAST><vBCST>140.00</vBCST><pICMSST>17.0000</pICMSST><vICMSST>6.80</vICMSST><vBCFCPST>140.00</vBCFCPST><pFCPST>2.0000</pFCPST><vFCPST>2.80</vFCPST>",
+    );
+    expect(n.xml).toContain("<vBCST>140.00</vBCST><vST>6.80</vST><vFCPST>2.80</vFCPST>");
+    expect(n.valorTotal).toBe(109.6);
+    expect(n.impostos.st).toBe(9.6);
+    await passaNoXsd(n.xml);
+  });
+
+  it("CST 70 e CST 30 passam no XSD", async () => {
+    const n = montar(
+      emitenteNormal,
+      {
+        itens: [
+          item({
+            icms: {
+              cst: "70",
+              aliquota: 17,
+              reducaoBase: 20,
+              st: { mva: 30, aliquota: 17, reducaoBase: 20 },
+            },
+          }),
+          item({ icms: { cst: "30", aliquotaPropria: 17, st: { mva: 30, aliquota: 17 } } }),
+        ],
+      },
+      300,
+    );
+    await passaNoXsd(n.xml);
+    expect(n.xml).toContain("<ICMS70>");
+    expect(n.xml).toContain("<ICMS30>");
+  });
+
+  it("Simples: CSOSN 201 (com crédito) e 202 deduzem o ICMS próprio da ST", async () => {
+    const n = montar(
+      emitenteSimples,
+      {
+        itens: [
+          item({
+            icms: {
+              csosn: "201",
+              aliquotaCredito: 2.56,
+              aliquotaPropria: 17,
+              st: { mva: 40, aliquota: 17 },
+            },
+          }),
+          item({ icms: { csosn: "202", aliquotaPropria: 17, st: { mva: 40, aliquota: 17 } } }),
+        ],
+      },
+      300,
+    );
+    await passaNoXsd(n.xml);
+    expect(n.xml).toContain(
+      "<ICMSSN201><orig>0</orig><CSOSN>201</CSOSN><modBCST>4</modBCST><pMVAST>40.0000</pMVAST><vBCST>140.00</vBCST><pICMSST>17.0000</pICMSST><vICMSST>6.80</vICMSST><pCredSN>2.5600</pCredSN><vCredICMSSN>2.56</vCredICMSSN></ICMSSN201>",
+    );
+    expect(n.valorTotal).toBe(213.6);
+  });
+
+  const consumidorSc = {
+    documento: "12345678909",
+    nome: "Consumidor SC",
+    indicadorIe: 9 as const,
+    endereco: lojaSc.endereco,
+  };
+  it("DIFAL base única e base dupla: grupo ICMSUFDest e totais; passa no XSD", async () => {
+    const difal = (baseDupla: boolean) =>
+      montar(
+        emitenteNormal,
+        {
+          destinatario: consumidorSc,
+          itens: [
+            item(
+              {
+                icms: { cst: "00", aliquota: 12 },
+                difal: {
+                  aliquotaInterna: 17,
+                  aliquotaInterestadual: 12,
+                  aliquotaFcp: 2,
+                  baseDupla,
+                },
+              },
+              "6108",
+            ),
+          ],
+        },
+        100,
+      );
+    const unica = difal(false);
+    // (17% − 12%) × 100 = 5,00; FCP 2% × 100 = 2,00
+    expect(unica.xml).toContain(
+      "<ICMSUFDest><vBCUFDest>100.00</vBCUFDest><vBCFCPUFDest>100.00</vBCFCPUFDest><pFCPUFDest>2.0000</pFCPUFDest><pICMSUFDest>17.0000</pICMSUFDest><pICMSInter>12.00</pICMSInter><pICMSInterPart>100.0000</pICMSInterPart><vFCPUFDest>2.00</vFCPUFDest><vICMSUFDest>5.00</vICMSUFDest><vICMSUFRemet>0.00</vICMSUFRemet></ICMSUFDest>",
+    );
+    expect(unica.xml).toContain(
+      "<vICMSDeson>0.00</vICMSDeson><vFCPUFDest>2.00</vFCPUFDest><vICMSUFDest>5.00</vICMSUFDest><vICMSUFRemet>0.00</vICMSUFRemet>",
+    );
+    expect(unica.valorTotal).toBe(100);
+    await passaNoXsd(unica.xml);
+    // Base dupla: (100 − 12) / (1 − 0,17) = 106,02; 106,02 × 17% − 12 = 6,02
+    const dupla = difal(true);
+    expect(dupla.xml).toContain("<vBCUFDest>106.02</vBCUFDest>");
+    expect(dupla.xml).toContain("<vICMSUFDest>6.02</vICMSUFDest>");
+    await passaNoXsd(dupla.xml);
+  });
+
+  it("regime normal: venda a consumidor de outro estado sem DIFAL é recusada", () => {
+    expect(() =>
+      montar(
+        emitenteNormal,
+        {
+          destinatario: consumidorSc,
+          itens: [item({ icms: { cst: "00", aliquota: 12 } }, "6108")],
+        },
+        100,
+      ),
+    ).toThrow("precisa do DIFAL");
+  });
+
+  it("IBS/CBS de 2026 e tributos aproximados: grupos, totais e texto; passa no XSD", async () => {
+    const n = montar(
+      emitenteNormal,
+      {
+        itens: [
+          item({
+            icms: { cst: "00", aliquota: 17 },
+            pis: { cst: "01", aliquota: 1.65 },
+            cofins: { cst: "01", aliquota: 7.6 },
+            ibsCbs: { cst: "000", classificacao: "000001" },
+            tributosAproximados: { federal: 13.45, estadual: 17 },
+          }),
+        ],
+      },
+      100,
+    );
+    // Base IBS/CBS = 100 − 17 (ICMS) − 1,37 (PIS) − 6,31 (COFINS) = 75,32
+    expect(n.xml).toContain(
+      "<IBSCBS><CST>000</CST><cClassTrib>000001</cClassTrib><gIBSCBS><vBC>75.32</vBC><gIBSUF><pIBSUF>0.1000</pIBSUF><vIBSUF>0.08</vIBSUF></gIBSUF><gIBSMun><pIBSMun>0.0000</pIBSMun><vIBSMun>0.00</vIBSMun></gIBSMun><vIBS>0.08</vIBS><gCBS><pCBS>0.9000</pCBS><vCBS>0.68</vCBS></gCBS></gIBSCBS></IBSCBS>",
+    );
+    expect(n.xml).toContain("<imposto><vTotTrib>30.45</vTotTrib><ICMS>");
+    expect(n.xml).toContain("<vNF>100.00</vNF><vTotTrib>30.45</vTotTrib></ICMSTot><IBSCBSTot>");
+    expect(n.xml).toContain("Trib aprox: R$ 13,45 Federal, R$ 17,00 Estadual e R$ 0,00 Municipal");
+    expect(n.impostos).toMatchObject({ ibsCbs: 0.76, tributosAproximados: 30.45 });
+    // Em 2026 o IBS/CBS não soma no total
+    expect(n.valorTotal).toBe(100);
+    await passaNoXsd(n.xml);
   });
 });

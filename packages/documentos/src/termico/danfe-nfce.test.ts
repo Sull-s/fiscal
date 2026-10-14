@@ -132,4 +132,11 @@ describe("quebrarTexto", () => {
     ]);
     expect(quebrarTexto("a\n\nb", 10)).toEqual(["a", "", "b"]);
   });
+
+  it("mostra os tributos aproximados quando a nota informa (Lei 12.741)", () => {
+    const comTributos = pendente.replace("<vNF>", "<vTotTrib>3.21</vTotTrib><vNF>");
+    expect(lerDanfeNfce(comTributos).totais.tributos).toBe(3.21);
+    expect(paraTexto(montarDanfeNfce(comTributos))).toContain("12.741/2012");
+    expect(paraTexto(montarDanfeNfce(pendente))).not.toContain("12.741");
+  });
 });

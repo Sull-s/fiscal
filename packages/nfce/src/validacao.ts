@@ -59,6 +59,12 @@ export function validarVenda(venda: Venda, crt: 1 | 2 | 3 | 4 = 1): void {
     if (!(Number(it.valorUnitario) >= 0)) problemas.push(`${nome}: valor unitário inválido.`);
     if (it.tributacao) {
       for (const p of problemasTributacao(it.tributacao, crt)) problemas.push(`${nome}: ${p}`);
+      const ic = it.tributacao.icms as { cst?: string; csosn?: string };
+      if (["10", "30", "70", "201", "202", "203"].includes(ic.cst ?? ic.csosn ?? ""))
+        problemas.push(
+          `${nome}: NFC-e não calcula ST na nota; para produto com ST já cobrada use CST 60 ou CSOSN 500.`,
+        );
+      if (it.tributacao.difal) problemas.push(`${nome}: NFC-e não tem DIFAL (venda presencial).`);
       const icms = it.tributacao.icms;
       if (
         (("csosn" in icms && icms.csosn === "500") || ("cst" in icms && icms.cst === "60")) &&

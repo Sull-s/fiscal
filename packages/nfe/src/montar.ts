@@ -14,8 +14,13 @@ import {
   montarDetPag,
   reais,
   repartir,
+  somarTotais,
   textoCreditoSimples,
+  textoTributosAproximados,
+  totaisIcms,
+  totaisZerados,
   totalDoItemEmCentavos,
+  totalIbsCbs,
 } from "@fiscal/nfe-comum";
 import { CONTINGENCIA_DA_UF } from "@fiscal/transporte";
 import {
@@ -126,8 +131,10 @@ export function montarNfe(entrada: {
     }
   });
 
-  const tot = { vBC: 0, vICMS: 0, vFCP: 0, vIPI: 0, vPIS: 0, vCOFINS: 0, vCredICMSSN: 0 };
+  const tot = totaisZerados();
   let pCredSN: number | undefined;
+  let temDifal = false;
+  let temIbsCbs = false;
   const det = operacao.itens
     .map((it, i) => {
       const imp = calcularImpostos(
@@ -144,8 +151,10 @@ export function montarNfe(entrada: {
           ...(nota.icmsNaBasePisCofins ? { icmsNaBasePisCofins: true } : {}),
         },
       );
-      for (const k of Object.keys(tot) as (keyof typeof tot)[]) tot[k] += imp[k];
+      somarTotais(tot, imp);
       pCredSN ??= imp.pCredSN;
+      temDifal ||= imp.temDifal;
+      temIbsCbs ||= imp.temIbsCbs;
       const unidade = it.unidade || "UN";
       const qtd = formatarDecimal(it.quantidade, 4);
       const vUn = formatarValorUnitario(it.valorUnitario);
@@ -185,7 +194,8 @@ export function montarNfe(entrada: {
   const vSeg = soma(seguros);
   const vOutro = soma(outras);
   // ICMS e PIS/COFINS estão "por dentro" do preço; o IPI é somado por fora
-  const vNF = vProd - vDesc + vFrete + vSeg + vOutro + tot.vIPI;
+  // A ST e o FCP-ST cobrados nesta nota também são somados (IBS/CBS de 2026 não)
+  const vNF = vProd - vDesc + vFrete + vSeg + vOutro + tot.vIPI + tot.vST + tot.vFCPST;
 
   const ide =
     "<ide>" +
@@ -246,11 +256,7 @@ export function montarNfe(entrada: {
   const zeros = (...nomes: string[]) => nomes.map((n) => tag(n, "0.00")).join("");
   const total =
     "<total><ICMSTot>" +
-    tag("vBC", dec(tot.vBC)) +
-    tag("vICMS", dec(tot.vICMS)) +
-    zeros("vICMSDeson") +
-    tag("vFCP", dec(tot.vFCP)) +
-    zeros("vBCST", "vST", "vFCPST", "vFCPSTRet") +
+    totaisIcms(tot, { difal: temDifal }) +
     tag("vProd", dec(vProd)) +
     tag("vFrete", dec(vFrete)) +
     tag("vSeg", dec(vSeg)) +
@@ -262,7 +268,10 @@ export function montarNfe(entrada: {
     tag("vCOFINS", dec(tot.vCOFINS)) +
     tag("vOutro", dec(vOutro)) +
     tag("vNF", dec(vNF)) +
-    "</ICMSTot></total>";
+    (tot.vTotTrib > 0 ? tag("vTotTrib", dec(tot.vTotTrib)) : "") +
+    "</ICMSTot>" +
+    (temIbsCbs ? totalIbsCbs(tot) : "") +
+    "</total>";
 
   const t = operacao.transporte ?? {};
   const tr = t.transportadora;
@@ -333,6 +342,7 @@ export function montarNfe(entrada: {
     tot.vCredICMSSN > 0 && pCredSN !== undefined
       ? textoCreditoSimples(tot.vCredICMSSN, pCredSN)
       : "",
+    tot.vTotTrib > 0 ? textoTributosAproximados(tot) : "",
   ]
     .filter(Boolean)
     .join(" | ");
@@ -364,6 +374,10 @@ export function montarNfe(entrada: {
     impostos: {
       icms: reais(tot.vICMS),
       fcp: reais(tot.vFCP),
+      st: reais(tot.vST + tot.vFCPST),
+      difal: reais(tot.vICMSUFDest + tot.vFCPUFDest),
+      ibsCbs: reais(tot.vIBSUF + tot.vIBSMun + tot.vCBS),
+      tributosAproximados: reais(tot.vTotTrib),
       ipi: reais(tot.vIPI),
       pis: reais(tot.vPIS),
       cofins: reais(tot.vCOFINS),

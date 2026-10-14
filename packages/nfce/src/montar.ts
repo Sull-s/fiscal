@@ -17,7 +17,12 @@ import {
   montarDetPag,
   reais,
   repartir,
+  somarTotais,
+  textoTributosAproximados,
+  totaisIcms,
+  totaisZerados,
   totalDoItemEmCentavos,
+  totalIbsCbs,
 } from "@fiscal/nfe-comum";
 import {
   escaparTexto,
@@ -258,7 +263,8 @@ export function montarNfce(entrada: {
       "</dest>"
     : "";
 
-  const totaisImpostos = { vBC: 0, vICMS: 0, vFCP: 0, vPIS: 0, vCOFINS: 0 };
+  const totaisImpostos = totaisZerados();
+  let temIbsCbs = false;
   const det = venda.itens
     .map((it, i) => {
       const impostos = calcularImpostos(
@@ -270,9 +276,8 @@ export function montarNfce(entrada: {
         },
         { consumidorFinal: true },
       );
-      for (const k of Object.keys(totaisImpostos) as (keyof typeof totaisImpostos)[]) {
-        totaisImpostos[k] += impostos[k];
-      }
+      somarTotais(totaisImpostos, impostos);
+      temIbsCbs ||= impostos.temIbsCbs;
       const xProd = homologacao && i === 0 ? TEXTO_HOMOLOGACAO_ITEM : it.descricao;
       const unidade = it.unidade || "UN";
       const qtd = formatarDecimal(it.quantidade, 4);
@@ -304,11 +309,7 @@ export function montarNfce(entrada: {
   const zeros = (...nomes: string[]) => nomes.map((n) => tag(n, "0.00")).join("");
   const total =
     "<total><ICMSTot>" +
-    tag("vBC", dec(totaisImpostos.vBC)) +
-    tag("vICMS", dec(totaisImpostos.vICMS)) +
-    zeros("vICMSDeson") +
-    tag("vFCP", dec(totaisImpostos.vFCP)) +
-    zeros("vBCST", "vST", "vFCPST", "vFCPSTRet") +
+    totaisIcms(totaisImpostos, { difal: false }) +
     tag("vProd", dec(vProd)) +
     zeros("vFrete", "vSeg") +
     tag("vDesc", dec(desconto)) +
@@ -317,11 +318,20 @@ export function montarNfce(entrada: {
     tag("vCOFINS", dec(totaisImpostos.vCOFINS)) +
     tag("vOutro", dec(outras)) +
     tag("vNF", dec(vNF)) +
-    "</ICMSTot></total>";
+    (totaisImpostos.vTotTrib > 0 ? tag("vTotTrib", dec(totaisImpostos.vTotTrib)) : "") +
+    "</ICMSTot>" +
+    (temIbsCbs ? totalIbsCbs(totaisImpostos) : "") +
+    "</total>";
 
   const transp = "<transp><modFrete>9</modFrete></transp>";
   const pag = `<pag>${venda.pagamentos.map(montarDetPag).join("")}${troco > 0 ? tag("vTroco", dec(troco)) : ""}</pag>`;
-  const infAdic = grupo("infAdic", texto("infCpl", venda.informacoesComplementares, 5000));
+  const infCpl = [
+    venda.informacoesComplementares,
+    totaisImpostos.vTotTrib > 0 ? textoTributosAproximados(totaisImpostos) : "",
+  ]
+    .filter(Boolean)
+    .join(" | ");
+  const infAdic = grupo("infAdic", texto("infCpl", infCpl, 5000));
   const rt = emitente.responsavelTecnico;
   const infRespTec = rt
     ? "<infRespTec>" +

@@ -118,11 +118,19 @@ export function validarNfe(emitente: EmitenteNfe, operacao: OperacaoNfe, nota: D
 
   // DIFAL (EC 87/2015): venda interestadual a consumidor final não contribuinte
   const consumidorFinal = nota.consumidorFinal ?? d?.indicadorIe === 9;
-  if (idDest === 2 && consumidorFinal && d?.indicadorIe === 9 && emitente.crt === 3) {
-    p.push(
-      "Venda para consumidor final não contribuinte de outro estado exige o DIFAL (ICMSUFDest), que este pacote ainda não calcula.",
-    );
-  }
+  const exigeDifal = idDest === 2 && consumidorFinal && d?.indicadorIe === 9;
+  itens.forEach((it, i) => {
+    const nome = `Item ${i + 1}${it.descricao ? ` (${it.descricao})` : ""}`;
+    // No Simples o DIFAL fica fora da nota (recolhido à parte); no regime normal vai no item
+    if (exigeDifal && emitente.crt === 3 && it.tributacao && !it.tributacao.difal)
+      p.push(
+        `${nome}: venda a consumidor final de outro estado precisa do DIFAL (tributacao.difal com a alíquota interna do destino).`,
+      );
+    if (!exigeDifal && it.tributacao?.difal)
+      p.push(
+        `${nome}: DIFAL só vale para venda interestadual a consumidor final não contribuinte.`,
+      );
+  });
 
   // Pagamentos
   const pagamentos = operacao.pagamentos ?? [];

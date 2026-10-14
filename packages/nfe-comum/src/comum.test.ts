@@ -111,7 +111,7 @@ describe("calcularImpostos", () => {
     expect(
       problemasTributacao({ icms: { csosn: "102" }, pis: { cst: "01", aliquota: 1.65 } }, 1),
     ).toEqual(["PIS: no Simples o imposto vai no DAS; use CST 04 a 09, 49 ou 99."]);
-    expect(problemasTributacao({ icms: { cst: "10" } } as never, 3)[0]).toContain("CST de ICMS 10");
+    expect(problemasTributacao({ icms: { cst: "90" } } as never, 3)[0]).toContain("CST de ICMS 90");
   });
 });
 
