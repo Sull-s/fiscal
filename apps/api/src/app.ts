@@ -38,15 +38,42 @@ export function criarServico(deps: DependenciasApi) {
   };
 }
 
+/**
+ * Origens exatas ("https://app.cliente.com.br") ou um domínio e todos os subdomínios
+ * ("https://*.base44.app"). Só https, a não ser localhost.
+ */
+export function origemPermitida(lista: string[]) {
+  const exatas = new Set(lista.filter((o) => !o.includes("*")));
+  const sufixos = lista
+    .filter((o) => o.startsWith("https://*."))
+    .map((o) => o.slice("https://*".length));
+  return (origem: string) => {
+    if (exatas.has(origem)) return true;
+    const m = /^https:\/\/([a-z0-9-]+(\.[a-z0-9-]+)*)$/.exec(origem);
+    return !!m && sufixos.some((s) => `.${m[1]}`.endsWith(s));
+  };
+}
+
 function montarApp(deps: DependenciasApi, ctx: ReturnType<typeof criarContexto>) {
   const app = new Hono<Ambiente>();
   app.onError(responderErro);
   // Navegador (@fiscal/ui) só nos endereços liberados; o painel não precisa (mesma origem)
   if (deps.origensPermitidas?.length) {
+    const permitida = origemPermitida(deps.origensPermitidas);
+    // Site da internet chamando a API no próprio PC (agente local): o Chrome pede licença extra
+    app.use("/v1/*", async (c, next) => {
+      await next();
+      if (
+        c.req.method === "OPTIONS" &&
+        c.req.header("Access-Control-Request-Private-Network") === "true" &&
+        permitida(c.req.header("Origin") ?? "")
+      )
+        c.res.headers.set("Access-Control-Allow-Private-Network", "true");
+    });
     app.use(
       "/v1/*",
       cors({
-        origin: deps.origensPermitidas,
+        origin: (origem) => (permitida(origem) ? origem : null),
         allowHeaders: ["Authorization", "Content-Type", "Idempotency-Key"],
         allowMethods: ["GET", "POST", "PUT", "DELETE"],
         maxAge: 600,
@@ -58,7 +85,12 @@ function montarApp(deps: DependenciasApi, ctx: ReturnType<typeof criarContexto>)
   );
 
   app.get("/saude", (c) =>
-    c.json({ ok: true, servico: "@fiscal/api", hora: new Date().toISOString() }),
+    c.json({
+      ok: true,
+      servico: "@fiscal/api",
+      hora: new Date().toISOString(),
+      ...deps.saude?.(),
+    }),
   );
 
   /** Painel do administrador (a página em si é pública; os dados exigem o token). */

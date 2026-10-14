@@ -4,6 +4,7 @@ import {
   situacaoCertificado,
 } from "@fiscal/certificado";
 import { validarCnpj } from "@fiscal/core";
+import type { Serie } from "@fiscal/numeracao";
 import { Hono } from "hono";
 import type { Contexto } from "../contexto";
 import { type Empresa, empresaPublica, gerarChaveApi, validarIdEmpresa } from "../empresas";
@@ -106,6 +107,27 @@ export function rotasAdmin(ctx: Contexto) {
     );
   });
 
+  /** Situação da série (próximo número, pendentes, lacunas). ?modelo=65&ambiente=1&serie=1 */
+  app.get("/empresas/:id/numeracao", async (c) => {
+    const empresa = await exigir(c.req.param("id"));
+    return c.json(await ctx.numeracao.situacao(lerSerie(empresa.id, c.req.query())));
+  });
+
+  /**
+   * Começa a série num número (migração de outro sistema que parou no 220 → primeiroNumero 221).
+   * Só vale para série ainda sem números.
+   */
+  app.post("/empresas/:id/numeracao/iniciar", async (c) => {
+    const empresa = await exigir(c.req.param("id"));
+    const corpo = await lerCorpo<Record<string, unknown>>(c);
+    const serie = lerSerie(empresa.id, corpo);
+    const primeiro = Number(corpo.primeiroNumero);
+    if (!Number.isInteger(primeiro) || primeiro < 1 || primeiro > 999_999_999)
+      falhar(400, "NUMERO_INVALIDO", "primeiroNumero deve ser um inteiro entre 1 e 999999999.");
+    await ctx.numeracao.iniciarEm(serie, primeiro);
+    return c.json(await ctx.numeracao.situacao(serie));
+  });
+
   app.delete("/empresas/:id/chaves/:chaveId", async (c) => {
     const empresa = await exigir(c.req.param("id"));
     const antes = empresa.chavesApi.length;
@@ -117,4 +139,16 @@ export function rotasAdmin(ctx: Contexto) {
   });
 
   return app;
+}
+
+function lerSerie(empresa: string, dados: Record<string, unknown>): Serie {
+  const modelo = String(dados.modelo ?? "65");
+  const ambiente = Number(dados.ambiente ?? 1);
+  const serie = String(dados.serie ?? "1");
+  if (modelo !== "65" && modelo !== "55")
+    falhar(400, "MODELO_INVALIDO", "modelo deve ser 65 ou 55.");
+  if (ambiente !== 1 && ambiente !== 2)
+    falhar(400, "AMBIENTE_INVALIDO", "ambiente deve ser 1 ou 2.");
+  if (!/^\d{1,3}$/.test(serie)) falhar(400, "SERIE_INVALIDA", "serie deve ter de 1 a 3 dígitos.");
+  return { empresa, modelo, ambiente: ambiente as 1 | 2, serie };
 }

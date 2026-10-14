@@ -1,0 +1,26 @@
+AGENTE FISCAL - emite as notas (NFC-e) direto deste computador
+================================================================
+
+INSTALAR
+1. Extraia o ZIP inteiro (botão direito > Extrair tudo).
+2. Dê dois cliques em INSTALAR.bat.
+   Se aparecer "O Windows protegeu o computador": Mais informações > Executar assim mesmo.
+3. No fim aparece a SENHA DO PAINEL e o painel abre no navegador. Guarde a senha.
+
+DEPOIS DE INSTALADO
+- Ele liga sozinho junto com o Windows e religa sozinho se parar.
+- Não precisa de internet para vender: sem internet a nota sai em contingência e
+  é enviada sozinha quando a internet voltar.
+- Na primeira vez, o navegador pode perguntar se o site pode acessar
+  "dispositivos da rede local": clique em PERMITIR.
+
+CUIDADOS
+- Deixe o computador ligado durante o expediente (ele não entra mais em suspensão).
+- Mantenha o relógio do Windows no automático (Configurações > Hora e idioma).
+- Backup: as notas são copiadas a cada hora para a pasta
+  "Notas Fiscais - backup" do OneDrive. Deixe o OneDrive conectado.
+- NUNCA apague a pasta %LOCALAPPDATA%\FiscalLocal: a lei manda guardar as notas por 5 anos.
+
+ATUALIZAR: extraia o ZIP novo e rode INSTALAR.bat de novo (as notas são mantidas).
+DESLIGAR: DESINSTALAR.bat (as notas são mantidas).
+PROBLEMAS: arquivo %LOCALAPPDATA%\FiscalLocal\agente.log

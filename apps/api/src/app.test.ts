@@ -854,6 +854,67 @@ describe("CORS", () => {
     ).toBe("https://app.cliente.com.br");
     expect((await pre("https://outro.site")).headers.get("Access-Control-Allow-Origin")).toBeNull();
   });
+
+  it("aceita subdomínios (*.base44.app) e libera rede privada para o agente local", async () => {
+    const local = criarServico({
+      cofre,
+      empresas: repositorioEmpresasEmArquivos(arquivos),
+      arquivos,
+      numeracao: armazemEmMemoria(),
+      origensPermitidas: ["https://*.base44.app"],
+    }).app;
+    const pre = (origem: string) =>
+      local.request("/v1/empresa", {
+        method: "OPTIONS",
+        headers: {
+          Origin: origem,
+          "Access-Control-Request-Method": "POST",
+          "Access-Control-Request-Private-Network": "true",
+        },
+      });
+    const ok = await pre("https://restoflow.base44.app");
+    expect(ok.headers.get("Access-Control-Allow-Origin")).toBe("https://restoflow.base44.app");
+    expect(ok.headers.get("Access-Control-Allow-Private-Network")).toBe("true");
+    for (const ruim of [
+      "https://base44.app.evil.com",
+      "https://evilbase44.app",
+      "http://x.base44.app",
+    ]) {
+      const r = await pre(ruim);
+      expect(r.headers.get("Access-Control-Allow-Origin")).toBeNull();
+      expect(r.headers.get("Access-Control-Allow-Private-Network")).toBeNull();
+    }
+  });
+});
+
+describe("numeração pelo administrador", () => {
+  it("começa a série no número do sistema anterior e recusa série já usada", async () => {
+    const r = await req("POST", "/v1/admin/empresas/rose/numeracao/iniciar", ADMIN, {
+      modelo: "65",
+      ambiente: 1,
+      serie: "7",
+      primeiroNumero: 221,
+    });
+    expect(r.status).toBe(200);
+    expect(((await r.json()) as { proximo: number }).proximo).toBe(221);
+    const s = (await (
+      await req("GET", "/v1/admin/empresas/rose/numeracao?modelo=65&ambiente=1&serie=7", ADMIN)
+    ).json()) as { proximo: number; lacunas: number[] };
+    expect(s).toMatchObject({ proximo: 221, lacunas: [] });
+
+    const de_novo = await req("POST", "/v1/admin/empresas/rose/numeracao/iniciar", ADMIN, {
+      ambiente: 1,
+      serie: "7",
+      primeiroNumero: 500,
+    });
+    expect(de_novo.status).not.toBe(200);
+    const invalido = await req("POST", "/v1/admin/empresas/rose/numeracao/iniciar", ADMIN, {
+      serie: "abc",
+      primeiroNumero: 1,
+    });
+    expect(invalido.status).toBe(400);
+    expect((await req("POST", "/v1/admin/empresas/rose/numeracao/iniciar")).status).toBe(401);
+  });
 });
 
 describe("monitoramento", () => {

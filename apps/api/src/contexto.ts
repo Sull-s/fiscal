@@ -30,6 +30,8 @@ export interface DependenciasApi {
   origensPermitidas?: string[];
   /** Para onde mandar os alertas do monitoramento (ex.: alertasPorUrl(FISCAL_ALERTA_URL)) */
   enviarAlertas?: EnviarAlertas;
+  /** Informações extras no GET /saude (ex.: último backup do agente local) */
+  saude?: () => Record<string, unknown>;
 }
 
 /** Monta os serviços e guarda em cache, por empresa, o certificado aberto e os clientes. */

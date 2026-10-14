@@ -19,3 +19,6 @@ coverage/
 
 # Dados locais da API (XMLs, cadastro, numeração)
 apps/api/dados/
+
+# Pacote do agente local (scripts/empacotar-agente-local.mjs)
+saida/

@@ -17,7 +17,9 @@ FISCAL_CHAVE_MESTRA=... FISCAL_TOKEN_ADMIN=... node apps/api/dist/principal.js
 | `FISCAL_BANCO_URL` | Postgres (Supabase, Neon…). Com ela, numeração, XMLs, PDFs e cadastro ficam no banco (tabelas `fiscal_*`, criadas sozinhas) e a pasta não é usada. Recomendado em produção: sem limite de operações como os storages de arquivo. |
 | `FISCAL_PASTA_DADOS` | Pasta de dados (padrão `./dados`): `arquivos/` (XML, PDF, cadastro, índice) e `numeracao/` (PostgreSQL embutido). Faça backup dela. |
 | `FISCAL_ALERTA_URL` | Webhook para alertas (Slack, Discord…; recebe `{ text, content }`): certificado vencendo/vencido, SEFAZ fora, nota pendente há mais de 30 min, offline há mais de 6 h, relógio errado, webhooks não entregues. Cada alerta repete no máximo a cada 6 h. |
-| `FISCAL_CORS_ORIGENS` | Endereços que podem chamar a API pelo navegador (`@fiscal/ui`), separados por vírgula. Sem ela, só chamadas de servidor. |
+| `FISCAL_CORS_ORIGENS` | Endereços que podem chamar a API pelo navegador (`@fiscal/ui`), separados por vírgula; `https://*.base44.app` libera o domínio e os subdomínios. Responde também ao pedido de rede privada do Chrome (site da internet chamando a API no próprio PC). Sem ela, só chamadas de servidor. |
+| `FISCAL_PASTA_BACKUP` | Só sem `FISCAL_BANCO_URL`: copia os arquivos novos para esta pasta a cada hora (nunca apaga lá) e a numeração uma vez por dia (guarda 14). Use uma pasta do OneDrive ou Google Drive. O `/saude` mostra o último backup. |
+| `HOST` | Endereço de escuta. `127.0.0.1` = só este computador ([agente local](../agente-local/README.md)). |
 | `PORTA` | Padrão 8787. |
 
 ## Painel
@@ -39,6 +41,10 @@ curl -X PUT localhost:8787/v1/admin/empresas/rose/certificado -H "Authorization:
 
 # 3. Gerar a chave de API da empresa (aparece uma vez só)
 curl -X POST localhost:8787/v1/admin/empresas/rose/chaves -H "Authorization: Bearer $ADMIN"
+
+# 4. (Só migrando de outro emissor) Começar a série depois do último número usado lá
+curl -X POST localhost:8787/v1/admin/empresas/rose/numeracao/iniciar -H "Authorization: Bearer $ADMIN" \
+  -H "Content-Type: application/json" -d '{"modelo":"65","ambiente":1,"serie":"1","primeiroNumero":221}'
 ```
 
 ## Rotas da empresa (`Authorization: Bearer fsk_…`)
