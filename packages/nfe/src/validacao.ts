@@ -144,6 +144,12 @@ export function validarNfe(emitente: EmitenteNfe, operacao: OperacaoNfe, nota: D
   pagamentos.forEach((x, i) => {
     if (x.forma === "sem-pagamento" ? Number(x.valor) !== 0 : !(Number(x.valor) > 0))
       p.push(`Pagamento ${i + 1}: valor inválido ("sem-pagamento" vai com 0).`);
+    // Sem isto a SEFAZ recusa com 392 (faltam os dados do pagamento integrado)
+    const eletronico = x.forma === "credito" || x.forma === "debito" || x.forma === "pix";
+    if (eletronico && x.integrado !== false && !validarCnpj(x.cnpjCredenciadora ?? ""))
+      p.push(
+        `Pagamento ${i + 1} (${x.forma}): pagamento integrado precisa do CNPJ da credenciadora (ou informe integrado: false).`,
+      );
   });
 
   // Cobrança

@@ -1,6 +1,16 @@
 import PDFDocument from "pdfkit";
 import { dataHora, documento, moeda } from "../formato";
 
+/** "14/10/2026 10:32" no horário de Brasília (o servidor pode estar em UTC) */
+const horaDeBrasilia = (d: Date) =>
+  new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    dateStyle: "short",
+    timeStyle: "short",
+  })
+    .format(d)
+    .replace(",", "");
+
 /**
  * Relatório mensal de notas para o contador (PDF A4): resumo por modelo e situação e a lista de
  * todas as notas do período. É um resumo de conferência; os XMLs (ZIP do mês) continuam sendo os
@@ -103,7 +113,7 @@ export async function gerarRelatorioNotas(
     .fillColor("#444")
     .text(`${d.empresa.nome} · CNPJ ${documento(d.empresa.cnpj)}`)
     .text(
-      `${d.ambiente === 1 ? "Produção" : "HOMOLOGAÇÃO (sem valor fiscal)"} · gerado em ${dataHora((d.geradoEm ?? new Date()).toISOString()).slice(0, 16)} (UTC)`,
+      `${d.ambiente === 1 ? "Produção" : "HOMOLOGAÇÃO (sem valor fiscal)"} · gerado em ${horaDeBrasilia(d.geradoEm ?? new Date())} (Brasília)`,
     )
     .fillColor("#000")
     .moveDown(1);

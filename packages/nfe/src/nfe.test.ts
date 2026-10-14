@@ -600,6 +600,22 @@ describe("ST, DIFAL, IBS/CBS e tributos aproximados", () => {
     ).toThrow("precisa do DIFAL");
   });
 
+  it("Pix/cartão sem os dados da maquininha precisa de integrado: false (senão a SEFAZ dá 392)", () => {
+    const op = {
+      itens: [item({ icms: { cst: "00", aliquota: 17 } })],
+      pagamentos: [{ forma: "pix" as const, valor: 100 }],
+    };
+    expect(() => montar(emitenteNormal, op, 100)).toThrow(
+      "pagamento integrado precisa do CNPJ da credenciadora",
+    );
+    const integrado = montar(
+      emitenteNormal,
+      { ...op, pagamentos: [{ forma: "pix", valor: 100, cnpjCredenciadora: "10573521000191" }] },
+      100,
+    );
+    expect(integrado.xml).toContain("<tpIntegra>1</tpIntegra><CNPJ>10573521000191</CNPJ>");
+  });
+
   it("IBS/CBS de 2026 e tributos aproximados: grupos, totais e texto; passa no XSD", async () => {
     const n = montar(
       emitenteNormal,
