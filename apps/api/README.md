@@ -17,6 +17,7 @@ FISCAL_CHAVE_MESTRA=... FISCAL_TOKEN_ADMIN=... node apps/api/dist/principal.js
 | `FISCAL_BANCO_URL` | Postgres (Supabase, Neon…). Com ela, numeração, XMLs, PDFs e cadastro ficam no banco (tabelas `fiscal_*`, criadas sozinhas) e a pasta não é usada. Recomendado em produção: sem limite de operações como os storages de arquivo. |
 | `FISCAL_PASTA_DADOS` | Pasta de dados (padrão `./dados`): `arquivos/` (XML, PDF, cadastro, índice) e `numeracao/` (PostgreSQL embutido). Faça backup dela. |
 | `FISCAL_ALERTA_URL` | Webhook para alertas (Slack, Discord…; recebe `{ text, content }`): certificado vencendo/vencido, SEFAZ fora, nota pendente há mais de 30 min, offline há mais de 6 h, relógio errado, webhooks não entregues. Cada alerta repete no máximo a cada 6 h. |
+| `FISCAL_CORS_ORIGENS` | Endereços que podem chamar a API pelo navegador (`@fiscal/ui`), separados por vírgula. Sem ela, só chamadas de servidor. |
 | `PORTA` | Padrão 8787. |
 
 ## Painel

@@ -24,6 +24,8 @@ import { alertasPorUrl } from "./monitor";
  *   FISCAL_PASTA_DADOS    pasta de XMLs, PDFs, cadastro e numeração (padrão ./dados)
  *   FISCAL_ALERTA_URL     webhook para alertas (Slack, Discord…): certificado vencendo, SEFAZ fora,
  *                         notas presas, relógio errado
+ *   FISCAL_CORS_ORIGENS   origens liberadas para chamar a API do navegador (@fiscal/ui), separadas
+ *                         por vírgula. Ex.: https://app.cliente.com.br
  *   PORTA                 padrão 8787
  */
 const chaveMestra = process.env.FISCAL_CHAVE_MESTRA;
@@ -59,6 +61,9 @@ const { app, executarRotinas } = criarServico({
   numeracao: armazemPostgres({ executar }),
   ...(process.env.FISCAL_TOKEN_ADMIN ? { tokenAdmin: process.env.FISCAL_TOKEN_ADMIN } : {}),
   aoRegistrar: (e) => console.log(JSON.stringify({ hora: new Date().toISOString(), ...e })),
+  ...(process.env.FISCAL_CORS_ORIGENS
+    ? { origensPermitidas: process.env.FISCAL_CORS_ORIGENS.split(",").map((o) => o.trim()) }
+    : {}),
   ...(process.env.FISCAL_ALERTA_URL
     ? { enviarAlertas: alertasPorUrl(process.env.FISCAL_ALERTA_URL) }
     : {}),

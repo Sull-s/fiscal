@@ -828,6 +828,34 @@ describe("painel do administrador", () => {
   });
 });
 
+describe("CORS", () => {
+  it("sem origens liberadas, a API não responde CORS ao navegador", async () => {
+    const r = await app.request("/v1/empresa", {
+      method: "OPTIONS",
+      headers: { Origin: "https://qualquer.site", "Access-Control-Request-Method": "GET" },
+    });
+    expect(r.headers.get("Access-Control-Allow-Origin")).toBeNull();
+  });
+  it("com origem liberada, só ela recebe permissão", async () => {
+    const comCors = criarServico({
+      cofre,
+      empresas: repositorioEmpresasEmArquivos(arquivos),
+      arquivos,
+      numeracao: armazemEmMemoria(),
+      origensPermitidas: ["https://app.cliente.com.br"],
+    }).app;
+    const pre = (origem: string) =>
+      comCors.request("/v1/empresa", {
+        method: "OPTIONS",
+        headers: { Origin: origem, "Access-Control-Request-Method": "GET" },
+      });
+    expect(
+      (await pre("https://app.cliente.com.br")).headers.get("Access-Control-Allow-Origin"),
+    ).toBe("https://app.cliente.com.br");
+    expect((await pre("https://outro.site")).headers.get("Access-Control-Allow-Origin")).toBeNull();
+  });
+});
+
 describe("monitoramento", () => {
   it("rota do administrador mostra empresas, notas presas e certificado", async () => {
     const r = (await (await req("GET", "/v1/admin/monitor", ADMIN)).json()) as {

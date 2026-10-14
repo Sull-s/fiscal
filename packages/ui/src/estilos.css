@@ -1,0 +1,227 @@
+/*
+ * Estilos dos componentes @fiscal/ui. Para combinar com o sistema do cliente, troque as variáveis
+ * (num seletor seu, ex.: .meu-app .fiscal { --fiscal-destaque: #e85d04 }).
+ */
+.fiscal {
+  --fiscal-fonte: inherit;
+  --fiscal-fundo: #ffffff;
+  --fiscal-fundo-suave: #f5f6f8;
+  --fiscal-texto: #1d2330;
+  --fiscal-suave: #5b6474;
+  --fiscal-borda: #dfe3ea;
+  --fiscal-destaque: #2457d6;
+  --fiscal-texto-destaque: #ffffff;
+  --fiscal-ok: #1e7d3a;
+  --fiscal-aviso: #9a5b00;
+  --fiscal-erro: #c62828;
+  --fiscal-raio: 10px;
+  font-family: var(--fiscal-fonte);
+  color: var(--fiscal-texto);
+  box-sizing: border-box;
+}
+@media (prefers-color-scheme: dark) {
+  .fiscal:not(.fiscal-claro) {
+    --fiscal-fundo: #1b2029;
+    --fiscal-fundo-suave: #12151b;
+    --fiscal-texto: #e7eaf0;
+    --fiscal-suave: #9aa3b2;
+    --fiscal-borda: #2b3240;
+    --fiscal-destaque: #7aa2ff;
+    --fiscal-texto-destaque: #0b0f17;
+    --fiscal-ok: #56d364;
+    --fiscal-aviso: #e3b341;
+    --fiscal-erro: #ff7b72;
+  }
+}
+.fiscal *,
+.fiscal *::before,
+.fiscal *::after {
+  box-sizing: inherit;
+}
+.fiscal-cartao {
+  /* Dentro de grid/flex do sistema, o cartão encolhe e a tabela rola por dentro */
+  min-width: 0;
+  max-width: 100%;
+  background: var(--fiscal-fundo);
+  border: 1px solid var(--fiscal-borda);
+  border-radius: var(--fiscal-raio);
+  padding: 16px;
+}
+.fiscal h2 {
+  font-size: 1.05em;
+  margin: 0 0 12px;
+}
+.fiscal h3 {
+  font-size: 1em;
+  margin: 0 0 8px;
+}
+.fiscal-topo {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.fiscal-topo h2 {
+  margin: 0;
+}
+.fiscal-suave {
+  color: var(--fiscal-suave);
+  font-size: 0.92em;
+}
+.fiscal-erro {
+  color: var(--fiscal-erro);
+}
+.fiscal-rolagem {
+  overflow-x: auto;
+}
+.fiscal-tabela {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 520px;
+}
+.fiscal-tabela th,
+.fiscal-tabela td {
+  padding: 8px 6px;
+  border-bottom: 1px solid var(--fiscal-borda);
+  text-align: left;
+  vertical-align: middle;
+}
+.fiscal-tabela th {
+  color: var(--fiscal-suave);
+  font-weight: 600;
+  font-size: 0.8em;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.fiscal-tabela .fiscal-numero {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.fiscal-acoes {
+  text-align: right;
+}
+.fiscal-acoes button {
+  margin: 2px 0 2px 6px;
+  white-space: nowrap;
+}
+.fiscal button,
+.fiscal input,
+.fiscal select,
+.fiscal textarea {
+  font: inherit;
+  color: var(--fiscal-texto);
+}
+.fiscal button {
+  background: var(--fiscal-fundo);
+  border: 1px solid var(--fiscal-borda);
+  border-radius: 7px;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+.fiscal button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.fiscal button:focus-visible,
+.fiscal input:focus-visible,
+.fiscal select:focus-visible,
+.fiscal textarea:focus-visible {
+  outline: 2px solid var(--fiscal-destaque);
+  outline-offset: 1px;
+}
+.fiscal .fiscal-principal {
+  background: var(--fiscal-destaque);
+  border-color: var(--fiscal-destaque);
+  color: var(--fiscal-texto-destaque);
+  font-weight: 600;
+}
+.fiscal .fiscal-perigo {
+  background: var(--fiscal-erro);
+  border-color: var(--fiscal-erro);
+  color: #fff;
+}
+.fiscal input,
+.fiscal select,
+.fiscal textarea {
+  width: 100%;
+  background: var(--fiscal-fundo-suave);
+  border: 1px solid var(--fiscal-borda);
+  border-radius: 7px;
+  padding: 7px 9px;
+}
+.fiscal textarea {
+  min-height: 80px;
+  resize: vertical;
+}
+.fiscal label {
+  display: block;
+  font-size: 0.85em;
+  color: var(--fiscal-suave);
+  margin: 10px 0 4px;
+}
+.fiscal-campos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0 12px;
+}
+.fiscal-botoes {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+.fiscal-itens {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.fiscal-itens li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 0;
+  border-bottom: 1px dashed var(--fiscal-borda);
+}
+.fiscal-total {
+  display: flex;
+  justify-content: space-between;
+  font-size: 1.15em;
+  margin: 10px 0;
+}
+.fiscal-resultado {
+  display: block;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--fiscal-fundo-suave);
+  margin-top: 10px;
+}
+.fiscal-etiqueta {
+  display: inline-block;
+  font-size: 0.78em;
+  padding: 2px 8px;
+  border-radius: 99px;
+  border: 1px solid currentColor;
+}
+.fiscal-ok {
+  color: var(--fiscal-ok);
+}
+.fiscal-aviso {
+  color: var(--fiscal-aviso);
+}
+.fiscal-neutro {
+  color: var(--fiscal-suave);
+}
+.fiscal-dialogo {
+  border: 1px solid var(--fiscal-borda);
+  border-radius: var(--fiscal-raio);
+  background: var(--fiscal-fundo);
+  padding: 18px;
+  width: min(460px, calc(100vw - 32px));
+}
+.fiscal-dialogo::backdrop {
+  background: rgb(0 0 0 / 0.4);
+}

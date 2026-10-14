@@ -2,6 +2,7 @@ import { situacaoCertificado } from "@fiscal/certificado";
 import { gerarRelatorioNotas, resumirNotas } from "@fiscal/documentos";
 import { Hono } from "hono";
 import { bearerAuth } from "hono/bearer-auth";
+import { cors } from "hono/cors";
 import { hashToken, hashesIguais } from "./cofre";
 import { type DependenciasApi, criarContexto } from "./contexto";
 import { autenticarChaveApi, empresaPublica } from "./empresas";
@@ -40,6 +41,18 @@ export function criarServico(deps: DependenciasApi) {
 function montarApp(deps: DependenciasApi, ctx: ReturnType<typeof criarContexto>) {
   const app = new Hono<Ambiente>();
   app.onError(responderErro);
+  // Navegador (@fiscal/ui) só nos endereços liberados; o painel não precisa (mesma origem)
+  if (deps.origensPermitidas?.length) {
+    app.use(
+      "/v1/*",
+      cors({
+        origin: deps.origensPermitidas,
+        allowHeaders: ["Authorization", "Content-Type", "Idempotency-Key"],
+        allowMethods: ["GET", "POST", "PUT", "DELETE"],
+        maxAge: 600,
+      }),
+    );
+  }
   app.notFound((c) =>
     c.json({ erro: { codigo: "ROTA_NAO_ENCONTRADA", mensagem: "Rota não encontrada." } }, 404),
   );

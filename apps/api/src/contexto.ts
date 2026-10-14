@@ -26,6 +26,8 @@ export interface DependenciasApi {
   aoRegistrar?: (evento: Record<string, unknown>) => void;
   /** Troca o envio HTTP dos webhooks (testes). Padrão: fetch */
   enviarWebhook?: EnviarWebhook;
+  /** Origens que podem chamar a API do navegador (CORS), ex.: ["https://app.cliente.com.br"] */
+  origensPermitidas?: string[];
   /** Para onde mandar os alertas do monitoramento (ex.: alertasPorUrl(FISCAL_ALERTA_URL)) */
   enviarAlertas?: EnviarAlertas;
 }

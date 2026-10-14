@@ -34,7 +34,7 @@ pnpm changeset     # registra uma mudança para a próxima versão
 | `@fiscal/numeracao` | ✅ 0.1.0 | Numeração atômica (PostgreSQL ou memória), reaproveitamento de rejeitadas, lacunas |
 | `@fiscal/dfe` | ✅ 0.1.0 | Notas emitidas contra o CNPJ (distribuição DF-e por NSU, resumos, XML completo, eventos) e manifestação do destinatário (ciência, confirmação, desconhecimento, não realizada) |
 | `apps/api` | ✅ 0.1.0 | Serviço central multi-empresa: certificados cifrados, chaves de API, NF-e, NFC-e, NFS-e, DANFE, ZIP, webhooks assinados e rotinas automáticas. Ver [apps/api/README.md](apps/api/README.md) |
-| `@fiscal/ui` | ⏳ | Componentes React com tema do cliente |
+| `@fiscal/ui` | ✅ 0.1.0 | Componentes React (emissor de NFC-e, notas do mês, cancelamento, contador, notas de fornecedores) com tema por variáveis CSS. Ver [packages/ui/README.md](packages/ui/README.md) |
 
 ## Princípios
 
