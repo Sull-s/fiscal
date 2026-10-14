@@ -19,6 +19,12 @@ FISCAL_CHAVE_MESTRA=... FISCAL_TOKEN_ADMIN=... node apps/api/dist/principal.js
 | `FISCAL_ALERTA_URL` | Webhook para alertas (Slack, Discord…; recebe `{ text, content }`): certificado vencendo/vencido, SEFAZ fora, nota pendente há mais de 30 min, offline há mais de 6 h, relógio errado, webhooks não entregues. Cada alerta repete no máximo a cada 6 h. |
 | `PORTA` | Padrão 8787. |
 
+## Painel
+
+Abra `http://<servidor>/painel` e entre com o `FISCAL_TOKEN_ADMIN`: alertas, empresas, cadastro
+(JSON), envio do certificado A1, geração e revogação de chaves de API. O token fica só na aba do
+navegador. Os passos abaixo (curl) fazem o mesmo.
+
 ## Primeiros passos (administrador)
 
 ```bash

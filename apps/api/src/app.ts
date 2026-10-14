@@ -6,6 +6,7 @@ import { hashToken, hashesIguais } from "./cofre";
 import { type DependenciasApi, criarContexto } from "./contexto";
 import { autenticarChaveApi, empresaPublica } from "./empresas";
 import { type Ambiente, falhar, lerCorpo, responderErro } from "./http";
+import { PAGINA_PAINEL } from "./painel/pagina";
 import { rotasAdmin } from "./rotas/admin";
 import { rotasDfe } from "./rotas/dfe";
 import { rotasNfce } from "./rotas/nfce";
@@ -45,6 +46,16 @@ function montarApp(deps: DependenciasApi, ctx: ReturnType<typeof criarContexto>)
 
   app.get("/saude", (c) =>
     c.json({ ok: true, servico: "@fiscal/api", hora: new Date().toISOString() }),
+  );
+
+  /** Painel do administrador (a página em si é pública; os dados exigem o token). */
+  app.get("/painel", (c) =>
+    c.html(PAGINA_PAINEL, 200, {
+      "Content-Security-Policy":
+        "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+      "Cache-Control": "no-store",
+      "Referrer-Policy": "no-referrer",
+    }),
   );
 
   // ---- Administração

@@ -814,6 +814,20 @@ describe("DF-e: notas de fornecedores", () => {
   });
 });
 
+describe("painel do administrador", () => {
+  it("serve a página com CSP restritiva e sem cache; os dados continuam exigindo o token", async () => {
+    const r = await req("GET", "/painel");
+    expect(r.status).toBe(200);
+    expect(r.headers.get("Content-Security-Policy")).toContain("default-src 'none'");
+    expect(r.headers.get("Cache-Control")).toBe("no-store");
+    const html = await r.text();
+    expect(html).toContain("<title>Painel fiscal</title>");
+    // Dados da API entram por textContent, nunca innerHTML
+    expect(html).not.toContain("innerHTML");
+    expect((await req("GET", "/v1/admin/empresas")).status).toBe(401);
+  });
+});
+
 describe("monitoramento", () => {
   it("rota do administrador mostra empresas, notas presas e certificado", async () => {
     const r = (await (await req("GET", "/v1/admin/monitor", ADMIN)).json()) as {
