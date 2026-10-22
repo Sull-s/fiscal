@@ -6,6 +6,10 @@ Módulos fiscais reutilizáveis para emitir e gerenciar documentos fiscais brasi
 Monorepo com **pnpm workspaces + Turborepo**, tudo em **TypeScript**, cada pacote publicado
 em ESM e CommonJS.
 
+> **Quer colocar nota fiscal num app?** Comece pelo [INTEGRAR.md](INTEGRAR.md): três receitas
+> (app Electron com o emissor embutido, app web + agente local, servidor) e o app de exemplo em
+> [`exemplos/app-desktop`](exemplos/app-desktop).
+
 ## Comandos
 
 ```bash
@@ -34,7 +38,8 @@ pnpm changeset     # registra uma mudança para a próxima versão
 | `@fiscal/numeracao` | ✅ 0.1.0 | Numeração atômica (PostgreSQL ou memória), reaproveitamento de rejeitadas, lacunas |
 | `@fiscal/dfe` | ✅ 0.1.0 | Notas emitidas contra o CNPJ (distribuição DF-e por NSU, resumos, XML completo, eventos) e manifestação do destinatário (ciência, confirmação, desconhecimento, não realizada) |
 | `apps/api` | ✅ 0.1.0 | Serviço central multi-empresa: certificados cifrados, chaves de API, NF-e, NFC-e, NFS-e, DANFE, ZIP, webhooks assinados e rotinas automáticas. Ver [apps/api/README.md](apps/api/README.md) |
-| `@fiscal/ui` | ✅ 0.1.0 | Componentes React (emissor de NFC-e, notas do mês, cancelamento, contador, notas de fornecedores) com tema por variáveis CSS. Ver [packages/ui/README.md](packages/ui/README.md) |
+| `@fiscal/agente` | ✅ 0.1.0 | Emissor embutido no app (Electron/Node): `iniciarAgente`, chave protegida pelo sistema (`chaveMestraProtegida`), ponte IPC (`@fiscal/agente/electron`). Publicado como `@sull-s/fiscal-agente` |
+| `@fiscal/ui` | ✅ 0.1.0 | Componentes React (emissor de NFC-e, notas do mês, cancelamento, contador, notas de fornecedores) com tema por variáveis CSS, `ConfigurarEmissor` (empresa + A1 + senha) e `fetchPeloIpc`. Publicado como `@sull-s/fiscal-ui`. Ver [packages/ui/README.md](packages/ui/README.md) |
 
 ## Princípios
 

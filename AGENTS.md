@@ -1,3 +1,9 @@
+# Para IAs
+
+- **Vai colocar nota fiscal num app?** Leia [INTEGRAR.md](INTEGRAR.md) e siga a receita certa.
+  O app de exemplo em `exemplos/app-desktop` é a referência que funciona.
+- **Vai mexer neste repositório (os módulos)?** Siga o [CLAUDE.md](CLAUDE.md) e rode `pnpm verificar`.
+
 <!-- BEGIN:turborepo-agent-rules -->
 
 # This is NOT the Turborepo you know
