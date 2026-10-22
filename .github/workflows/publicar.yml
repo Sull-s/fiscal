@@ -1,0 +1,35 @@
+# Publica @sull-s/fiscal-agente e @sull-s/fiscal-ui no GitHub Packages (npm privado).
+# Rodar: crie a tag da versão (git tag v0.1.0 && git push --tags) ou dispare à mão em Actions.
+# Usa o token do próprio repositório: ninguém precisa criar token para PUBLICAR.
+# Para INSTALAR nos apps: Personal Access Token com read:packages (veja INTEGRAR.md).
+name: publicar
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          registry-url: https://npm.pkg.github.com
+          scope: "@sull-s"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm verificar
+      - run: pnpm build
+      - run: node scripts/pacotes-publicaveis.mjs --publicar
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
