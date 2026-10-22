@@ -209,6 +209,30 @@ mostre `mensagem` ao usuário (e `detalhes.problemas`, quando houver: é a lista
 | `GET /v1/nfe/{chave}/danfe` · `POST …/carta-correcao` `{ correcao }` · `POST …/cancelamento` | DANFE em PDF, carta de correção, cancelar (24 h) |
 | `POST /v1/nfse` `{ servico: { descricao }, valores: { valorServico }, tomador? }` | NFS-e (códigos do serviço vêm do cadastro: `servicoPadrao`) |
 | `GET /v1/nfse/{chave}/danfse` · `POST …/cancelamento` `{ motivo }` | PDF e cancelar |
+
+### NFS-e e a reforma tributária (IBS/CBS)
+
+O Sistema Nacional da NFS-e está trocando de leiaute (NT 009). Em 22/10/2026: a **produção
+restrita** (teste) já exige o leiaute novo e, para competência a partir de 10/2026, o grupo
+IBS/CBS; a **produção** ainda usa o leiaute anterior. O emissor cuida disso sozinho:
+
+- usa o leiaute de cada ambiente (`2026-02` na produção, `2026-10` no teste) e, se o governo
+  recusar por esquema no dia da virada, monta de novo no outro leiaute e reenvia (sem gastar
+  número) — a resposta traz o alerta `LEIAUTE_TROCADO`;
+- **o que o app precisa garantir**: o cadastro da empresa com os códigos do IBS/CBS do serviço,
+  dados pelo contador, em `nfse.servicoPadrao.ibsCbs` (tela `ConfigurarEmissor`, seção NFS-e):
+
+```json
+"servicoPadrao": {
+  "codigoTributacaoNacional": "090201",
+  "ibsCbs": { "cst": "000", "cClassTrib": "000001", "cIndOp": "100301" }
+}
+```
+
+  (os valores acima são os **genéricos usados nos testes**: tributação integral e "demais
+  serviços em operações onerosas". Os da empresa real dependem da atividade — ex.: agência de
+  turismo tem regras próprias de base de cálculo.) Sem eles, a emissão no leiaute novo é barrada
+  antes de ir ao governo com a mensagem "peça os códigos ao contador".
 | `GET /v1/relatorios/{AAAA}/{MM}` (`?formato=json`, `?ambiente=2`) | Relatório do contador (PDF) ou a lista das notas |
 | `GET /v1/arquivos/{AAAA}/{MM}` | ZIP dos XMLs do mês para o contador |
 | `GET /v1/sefaz/status` | SEFAZ no ar? Diferença do relógio do PC |
@@ -242,6 +266,6 @@ Tema por variáveis CSS `--fiscal-*` (ver `packages/ui/README.md`).
 - [ ] `ConfigurarEmissor` aparece no primeiro uso (empresa sem certificado)
 - [ ] Toda emissão manda `Idempotency-Key` única por venda
 - [ ] As 4 situações tratadas (offline e pendente contam como venda feita)
-- [ ] Produtos com NCM/CFOP/CSOSN do contador
+- [ ] Produtos com NCM/CFOP/CSOSN do contador (e, na NFS-e, CST e cClassTrib do IBS/CBS)
 - [ ] Testado em homologação com venda autorizada e cancelada
 - [ ] (Electron) `asarUnpack` no build e `agente.parar()` ao sair

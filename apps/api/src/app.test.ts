@@ -17,6 +17,8 @@ const TESTES = join(import.meta.dirname, "..", "testes");
 const PFX = readFileSync(join(TESTES, "certificado-teste.pfx")).toString("base64");
 const NFSE_REAL = readFileSync(join(TESTES, "nfse-autorizada.xml"), "utf8");
 const CHAVE_NFSE = "43149022210440532000101000000000000126089303229430";
+/** Códigos genéricos de IBS/CBS (tributação integral, serviço em geral) só para os testes */
+const IBS_CBS_TESTE = { cst: "000", cClassTrib: "000001", cIndOp: "100301" };
 /** NFS-e da empresa de teste (CNPJ 48618635000183) emitida por outro sistema */
 const CHAVE_OUTRO_SISTEMA = `4314902${"22"}48618635000183${"0000000000777"}2610${"123456789"}0`;
 const ADMIN = "token-admin-de-teste-bem-comprido";
@@ -210,7 +212,12 @@ beforeAll(async () => {
     cnpj: "48618635000183",
     ambiente: 2,
     nfce: { emitente, serie: "1", versaoAplicativo: "Teste API" },
-    nfse: { prestador: { documento: "48618635000183", regime: { opcaoSimples: 2 } }, serie: "900" },
+    nfse: {
+      prestador: { documento: "48618635000183", regime: { opcaoSimples: 2 } },
+      serie: "900",
+      // Homologação usa o leiaute novo, que exige IBS/CBS a partir de 10/2026 (códigos de teste)
+      servicoPadrao: { ibsCbs: IBS_CBS_TESTE },
+    },
   });
   await req("PUT", "/v1/admin/empresas/rose/certificado", ADMIN, {
     pfxBase64: PFX,
@@ -995,7 +1002,11 @@ describe("tela de testes", () => {
     await req("PUT", "/v1/admin/empresas/rose", ADMIN, {
       nfse: {
         ...empresa.nfse,
-        servicoPadrao: { codigoMunicipioPrestacao: "4314902", codigoTributacaoNacional: "090201" },
+        servicoPadrao: {
+          codigoMunicipioPrestacao: "4314902",
+          codigoTributacaoNacional: "090201",
+          ibsCbs: IBS_CBS_TESTE,
+        },
       },
     });
     const r = await req("POST", "/v1/nfse", chaveApi, {

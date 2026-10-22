@@ -1,18 +1,26 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { ErroFiscal } from "@fiscal/core";
-import { verificarAssinaturas } from "@fiscal/xml";
+import { validarContraXsd, verificarAssinaturas } from "@fiscal/xml";
 import { describe, expect, it } from "vitest";
 import { entradaReal } from "../testes/entrada-real";
 import { montarCancelamentoNfse, montarDps, montarIdDps } from "./dps";
 import { decomporChaveNfse, lerNfse } from "./nfse";
 
 const ANTIGO = join(import.meta.dirname, "..", "testes", "fixtures", "antigo");
+/** Esquemas oficiais: produção (09/02/2026) e produção restrita (20/10/2026) */
+const XSD = (leiaute: "2026-02" | "2026-10") =>
+  join(import.meta.dirname, "..", "testes", "xsd", leiaute, "DPS_v1.01.xsd");
 const ler = (nome: string) => readFileSync(join(ANTIGO, nome), "utf8");
 
 describe("montarDps", () => {
-  it("idêntica à DPS que o Sistema Nacional aceitou e transformou em NFS-e", () => {
-    const { xml, id, dataEmissao } = montarDps(entradaReal());
+  it("idêntica à DPS que o Sistema Nacional aceitou e transformou em NFS-e (leiaute 2026-02)", () => {
+    const e = entradaReal();
+    const { xml, id, dataEmissao, leiaute } = montarDps({
+      ...e,
+      dps: { ...e.dps, leiaute: "2026-02" },
+    });
+    expect(leiaute).toBe("2026-02");
     expect(xml).toBe(ler("dps-aceita.xml").replace(/<Signature[\s\S]*<\/Signature>/, ""));
     expect(id).toBe("DPS431490221044053200010100900000000000000001");
     expect(dataEmissao).toBe("2026-08-28T08:09:11-03:00");
@@ -22,6 +30,62 @@ describe("montarDps", () => {
     expect(xml.replace(/^<\?xml[^>]*\?>/, "")).toBe(
       embutida.replace(/<Signature[\s\S]*<\/Signature>/, ""),
     );
+  });
+
+  it("cada leiaute passa no seu esquema oficial e é recusado pelo outro", async () => {
+    for (const leiaute of ["2026-02", "2026-10"] as const) {
+      const e = entradaReal();
+      const { xml } = montarDps({ ...e, dps: { ...e.dps, leiaute } });
+      const proprio = await validarContraXsd(xml, XSD(leiaute));
+      expect(proprio.erros).toEqual([]);
+      const outro = await validarContraXsd(xml, XSD(leiaute === "2026-02" ? "2026-10" : "2026-02"));
+      expect(outro.valido).toBe(false);
+    }
+  });
+
+  it("2026-10: finNFSe=0 depois de tpEmit, NBS antes da descrição e versao 1.01", () => {
+    const e = entradaReal();
+    const { xml, leiaute } = montarDps({ ...e, dps: { ...e.dps, leiaute: "2026-10" } });
+    expect(leiaute).toBe("2026-10");
+    expect(xml).toContain('versao="1.01"');
+    expect(xml).toContain("<tpEmit>1</tpEmit><finNFSe>0</finNFSe><cLocEmi>");
+    expect(xml).toMatch(/<cNBS>118054000<\/cNBS><xDescServ>/);
+  });
+
+  it("IBS/CBS (2026-10): grupo no fim da DPS, passa no esquema; obrigatório a partir de 10/2026", async () => {
+    const e = entradaReal();
+    const ibsCbs = { cst: "000", cClassTrib: "000001" };
+    const outubro = { ...e.dps, leiaute: "2026-10" as const, competencia: "2026-10-22" };
+    const { xml } = montarDps({ ...e, servico: { ...e.servico, ibsCbs }, dps: outubro });
+    expect(xml).toContain(
+      "<IBSCBS><indDest>0</indDest><valores><trib><CST>000</CST><cClassTrib>000001</cClassTrib></trib></valores></IBSCBS></infDPS>",
+    );
+    expect((await validarContraXsd(xml, XSD("2026-10"))).erros).toEqual([]);
+
+    // Sem os códigos: barrado antes de ir ao gov.br (lá seria E0855)
+    expect(() => montarDps({ ...e, dps: outubro })).toThrow(/exige o grupo IBS\/CBS/);
+    // Competência antiga não exige; e o leiaute de produção nunca leva o grupo
+    expect(() => montarDps({ ...e, dps: { ...outubro, competencia: "2026-09-30" } })).not.toThrow();
+    const producao = montarDps({
+      ...e,
+      servico: { ...e.servico, ibsCbs },
+      dps: { ...outubro, leiaute: "2026-02" },
+    });
+    expect(producao.xml).not.toContain("<IBSCBS>");
+    // Códigos no formato errado
+    expect(() =>
+      montarDps({
+        ...e,
+        servico: { ...e.servico, ibsCbs: { cst: "0", cClassTrib: "1" } },
+        dps: outubro,
+      }),
+    ).toThrow(/CST deve ter 3 dígitos/);
+  });
+
+  it("sem leiaute, cada ambiente usa o seu (produção 2026-02, restrita 2026-10)", () => {
+    const e = entradaReal();
+    expect(montarDps({ ...e, dps: { ...e.dps, ambiente: 1 } }).leiaute).toBe("2026-02");
+    expect(montarDps({ ...e, dps: { ...e.dps, ambiente: 2 } }).leiaute).toBe("2026-10");
   });
 
   it("Id tem 45 caracteres, com CPF ou CNPJ", () => {

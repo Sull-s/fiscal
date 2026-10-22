@@ -234,6 +234,8 @@ export interface EmpresaConfigurada {
       codigoMunicipioPrestacao?: string;
       codigoTributacaoNacional?: string;
       codigoNbs?: string;
+      /** Reforma tributária (NFS-e com competência a partir de 10/2026): códigos do contador */
+      ibsCbs?: { cst: string; cClassTrib: string; cIndOp?: string };
     };
   };
   certificado: CertificadoInfo | null;

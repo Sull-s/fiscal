@@ -287,6 +287,9 @@ ol.passos{margin:8px 0 0;padding-left:22px}ol.passos li{margin:3px 0}
     if(digitos($("s_trib").value)) servico.codigoTributacaoNacional = digitos($("s_trib").value);
     if(digitos($("s_nbs").value)) servico.codigoNbs = digitos($("s_nbs").value);
     if(!servico.codigoMunicipioPrestacao && !(e.nfse.servicoPadrao && e.nfse.servicoPadrao.codigoMunicipioPrestacao)) servico.codigoMunicipioPrestacao = e.nfce ? e.nfce.emitente.endereco.codigoMunicipio : (e.nfe ? e.nfe.emitente.endereco.codigoMunicipio : undefined);
+    // Reforma tributária: no TESTE, sem os códigos do contador no cadastro, usa os genéricos
+    // (tributação integral, serviço em geral). Em produção valem só os do cadastro.
+    if(ambiente()===2 && !(e.nfse.servicoPadrao && e.nfse.servicoPadrao.ibsCbs)) servico.ibsCbs = { cst: "000", cClassTrib: "000001", cIndOp: "100301" };
     var pedido = { servico: servico, valores: { valorServico: numero($("s_valor").value), tributacaoIssqn: 1, retencaoIss: 1 }, referencia: "tela-de-testes" };
     var doc = digitos($("s_doc").value);
     if(doc) pedido.tomador = { documento: doc, nome: $("s_nome").value.trim() || "Tomador" };

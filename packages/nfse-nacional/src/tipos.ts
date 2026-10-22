@@ -42,6 +42,22 @@ export interface Tomador {
   email?: string;
 }
 
+/**
+ * Grupo IBS/CBS da DPS (reforma tributária). Só existe no leiaute 2026-10, onde é obrigatório
+ * para competência a partir de 10/2026 (regra E0855). Os códigos dependem da atividade e do
+ * regime: peça ao contador (tabelas oficiais de CST e cClassTrib do IBS/CBS).
+ */
+export interface IbsCbsNfse {
+  /** CST do IBS/CBS, 3 dígitos (ex.: "000" = tributação integral) */
+  cst: string;
+  /** Código de classificação tributária, 6 dígitos (ex.: "000001") */
+  cClassTrib: string;
+  /** Código indicador da operação (tabela do Anexo VII da NFS-e), 6 dígitos */
+  cIndOp?: string;
+  /** 1 = operação de uso ou consumo pessoal (art. 57 da LC 214/2025) */
+  indFinal?: 0 | 1;
+}
+
 export interface Servico {
   /** Município onde o serviço foi prestado (IBGE, 7 dígitos) */
   codigoMunicipioPrestacao: string;
@@ -52,6 +68,8 @@ export interface Servico {
   codigoNbs?: string;
   descricao: string;
   informacoesComplementares?: string;
+  /** Grupo IBS/CBS (leiaute 2026-10). Ignorado no leiaute 2026-02 */
+  ibsCbs?: IbsCbsNfse;
 }
 
 export interface Valores {
@@ -75,9 +93,21 @@ export interface Valores {
   percentualTributosSimples?: number;
 }
 
+/**
+ * Leiaute da DPS, pela data dos esquemas oficiais (gov.br/nfse):
+ *   "2026-02"  esquemas de produção de 09/02/2026 — o que a PRODUÇÃO aceita hoje
+ *   "2026-10"  esquemas da produção restrita de 20/10/2026 (reforma tributária, NT 009):
+ *              finNFSe obrigatório depois de tpEmit e cNBS antes da descrição do serviço
+ * Os dois são incompatíveis entre si. Sem `leiaute`, vale o padrão de cada ambiente
+ * (LEIAUTE_PADRAO) e emitirNfse troca sozinho se o Sistema Nacional recusar por esquema.
+ */
+export type LeiauteDps = "2026-02" | "2026-10";
+
 export interface DadosDps {
   /** 1 produção · 2 produção restrita (homologação) */
   ambiente: 1 | 2;
+  /** Leiaute forçado (normalmente omita: veja LeiauteDps) */
+  leiaute?: LeiauteDps;
   /** Até 5 dígitos. Use uma série só para testes (ex.: "900") */
   serie: string;
   numero: number;
@@ -106,4 +136,6 @@ export interface DpsMontada {
   /** Id do infDPS (45 caracteres): também serve para consultar a DPS depois */
   id: string;
   dataEmissao: string;
+  /** Leiaute em que foi montada */
+  leiaute: LeiauteDps;
 }

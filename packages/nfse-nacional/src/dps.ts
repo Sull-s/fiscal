@@ -6,7 +6,16 @@ import {
   validarCpf,
 } from "@fiscal/core";
 import { escaparTexto, formatarDecimal, somenteDigitos, tag } from "@fiscal/xml";
-import type { DadosDps, DpsMontada, Prestador, Servico, Tomador, Valores } from "./tipos";
+import type {
+  DadosDps,
+  DpsMontada,
+  IbsCbsNfse,
+  LeiauteDps,
+  Prestador,
+  Servico,
+  Tomador,
+  Valores,
+} from "./tipos";
 
 export const NS_NFSE = "http://www.sped.fazenda.gov.br/nfse";
 
@@ -100,20 +109,40 @@ function tomadorXml(t: Tomador | undefined): string {
   );
 }
 
-function servicoXml(s: Servico): string {
+function servicoXml(s: Servico, leiaute: LeiauteDps): string {
+  const descricao = textoLivre("xDescServ", s.descricao, 2000);
+  const nbs = tag("cNBS", somenteDigitos(s.codigoNbs));
   return (
     "<serv><locPrest>" +
     tag("cLocPrestacao", pad(s.codigoMunicipioPrestacao, 7)) +
     "</locPrest><cServ>" +
     tag("cTribNac", somenteDigitos(s.codigoTributacaoNacional)) +
     tag("cTribMun", s.codigoTributacaoMunicipal) +
-    textoLivre("xDescServ", s.descricao, 2000) +
-    tag("cNBS", somenteDigitos(s.codigoNbs)) +
+    // 2026-10: o NBS passou para antes da descrição
+    (leiaute === "2026-10" ? nbs + descricao : descricao + nbs) +
     "</cServ>" +
     (s.informacoesComplementares
       ? `<infoCompl>${textoLivre("xInfComp", s.informacoesComplementares, 2000)}</infoCompl>`
       : "") +
     "</serv>"
+  );
+}
+
+/**
+ * Grupo IBS/CBS (leiaute 2026-10). Destinatário = o próprio tomador (indDest 0); as alíquotas e
+ * os valores quem calcula é o Sistema Nacional (calculadora oficial), não a DPS.
+ */
+function ibsCbsXml(ibs: IbsCbsNfse | undefined): string {
+  if (!ibs) return "";
+  return (
+    "<IBSCBS>" +
+    tag("indFinal", ibs.indFinal) +
+    tag("cIndOp", ibs.cIndOp) +
+    tag("indDest", 0) +
+    "<valores><trib>" +
+    tag("CST", ibs.cst) +
+    tag("cClassTrib", ibs.cClassTrib) +
+    "</trib></valores></IBSCBS>"
   );
 }
 
@@ -146,15 +175,33 @@ function valoresXml(v: Valores): string {
   );
 }
 
-function validar(entrada: {
-  prestador: Prestador;
-  tomador?: Tomador;
-  servico: Servico;
-  valores: Valores;
-  dps: DadosDps;
-}): void {
+function validar(
+  entrada: {
+    prestador: Prestador;
+    tomador?: Tomador;
+    servico: Servico;
+    valores: Valores;
+    dps: DadosDps;
+  },
+  leiaute: LeiauteDps,
+): void {
   const { prestador, tomador, servico, valores, dps } = entrada;
   const problemas: string[] = [];
+  // IBS/CBS: no leiaute novo é obrigatório a partir da competência 10/2026 (E0855)
+  const competencia = dps.competencia ?? (dps.dataEmissao ?? new Date()).toISOString().slice(0, 10);
+  const ibs = servico.ibsCbs;
+  if (leiaute === "2026-10" && !ibs && competencia >= "2026-10-01") {
+    problemas.push(
+      "A partir da competência 10/2026 a NFS-e exige o grupo IBS/CBS: cadastre o CST e o cClassTrib do serviço (peça os códigos ao contador).",
+    );
+  }
+  if (ibs) {
+    if (!/^\d{3}$/.test(ibs.cst)) problemas.push("IBS/CBS: CST deve ter 3 dígitos (ex.: 000).");
+    if (!/^\d{6}$/.test(ibs.cClassTrib))
+      problemas.push("IBS/CBS: cClassTrib deve ter 6 dígitos (ex.: 000001).");
+    if (ibs.cIndOp !== undefined && !/^\d{6}$/.test(ibs.cIndOp))
+      problemas.push("IBS/CBS: código indicador da operação (cIndOp) deve ter 6 dígitos.");
+  }
   const docPrest = limparCnpj(prestador.documento ?? "");
   if (!(docPrest.length === 14 ? validarCnpj(docPrest) : validarCpf(docPrest))) {
     problemas.push("CNPJ/CPF do prestador inválido.");
@@ -200,8 +247,14 @@ function validar(entrada: {
   }
 }
 
+/** Leiaute de cada ambiente enquanto a produção não virar (veja LeiauteDps) */
+export const LEIAUTE_PADRAO: Readonly<Record<1 | 2, LeiauteDps>> = { 1: "2026-02", 2: "2026-10" };
+
+/** Atributo versao da <DPS> em cada leiaute (os dois esquemas aceitam 1.00 e 1.01) */
+const VERSAO: Record<LeiauteDps, string> = { "2026-02": "1.00", "2026-10": "1.01" };
+
 /**
- * Monta a DPS (leiaute nacional 1.00), pronta para assinar
+ * Monta a DPS (leiaute nacional; veja LeiauteDps), pronta para assinar
  * (`assinarXml(xml, { elemento: "infDPS", perfil: "nfse-nacional", certificado })`).
  * A ordem das tags segue o xs:sequence do XSD: não reordene.
  */
@@ -212,8 +265,9 @@ export function montarDps(entrada: {
   valores: Valores;
   dps: DadosDps;
 }): DpsMontada {
-  validar(entrada);
   const { prestador, tomador, servico, valores, dps } = entrada;
+  const leiaute = dps.leiaute ?? LEIAUTE_PADRAO[dps.ambiente];
+  validar(entrada, leiaute);
   const cLocEmi = pad(dps.codigoMunicipioEmissor ?? servico.codigoMunicipioPrestacao, 7);
   const id = montarIdDps({
     codigoMunicipioEmissor: cLocEmi,
@@ -234,17 +288,21 @@ export function montarDps(entrada: {
     tag("nDPS", dps.numero) +
     tag("dCompet", dps.competencia ?? dhEmi.slice(0, 10)) +
     tag("tpEmit", dps.tipoEmitente ?? 1) +
+    // 2026-10: finalidade da NFS-e (0 = regular, o único valor aceito hoje)
+    (leiaute === "2026-10" ? tag("finNFSe", 0) : "") +
     tag("cLocEmi", cLocEmi) +
     prestadorXml(prestador) +
     tomadorXml(tomador) +
-    servicoXml(servico) +
+    servicoXml(servico, leiaute) +
     valoresXml(valores) +
+    (leiaute === "2026-10" ? ibsCbsXml(servico.ibsCbs) : "") +
     "</infDPS>";
 
   return {
-    xml: `<?xml version="1.0" encoding="UTF-8"?><DPS xmlns="${NS_NFSE}" versao="1.00">${infDps}</DPS>`,
+    xml: `<?xml version="1.0" encoding="UTF-8"?><DPS xmlns="${NS_NFSE}" versao="${VERSAO[leiaute]}">${infDps}</DPS>`,
     id,
     dataEmissao: dhEmi,
+    leiaute,
   };
 }
 

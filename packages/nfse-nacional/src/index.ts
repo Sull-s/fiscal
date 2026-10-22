@@ -1,4 +1,4 @@
-export { NS_NFSE, montarCancelamentoNfse, montarDps, montarIdDps } from "./dps";
+export { LEIAUTE_PADRAO, NS_NFSE, montarCancelamentoNfse, montarDps, montarIdDps } from "./dps";
 export {
   AMBIENTES_NFSE,
   type ClienteNfse,
@@ -9,6 +9,12 @@ export {
   criarClienteNfse,
   lerErros,
 } from "./cliente";
-export { cancelarNfse, emitirNfse, resolverPendente } from "./emitir";
+export {
+  cancelarNfse,
+  emitirNfse,
+  leiauteEmUso,
+  recusaDeLeiaute,
+  resolverPendente,
+} from "./emitir";
 export { type ResumoNfse, decomporChaveNfse, lerNfse } from "./nfse";
 export type * from "./tipos";

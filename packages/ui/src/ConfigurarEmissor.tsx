@@ -86,6 +86,9 @@ interface Formulario {
   serieNfse: string;
   codigoTributacaoNacional: string;
   codigoNbs: string;
+  cstIbsCbs: string;
+  cClassTrib: string;
+  cIndOp: string;
 }
 
 const VAZIO: Formulario = {
@@ -112,6 +115,9 @@ const VAZIO: Formulario = {
   serieNfse: "1",
   codigoTributacaoNacional: "",
   codigoNbs: "",
+  cstIbsCbs: "",
+  cClassTrib: "",
+  cIndOp: "",
 };
 
 function doCadastro(e: EmpresaConfigurada): Formulario {
@@ -143,6 +149,9 @@ function doCadastro(e: EmpresaConfigurada): Formulario {
     serieNfse: e.nfse?.serie ?? "1",
     codigoTributacaoNacional: e.nfse?.servicoPadrao?.codigoTributacaoNacional ?? "",
     codigoNbs: e.nfse?.servicoPadrao?.codigoNbs ?? "",
+    cstIbsCbs: e.nfse?.servicoPadrao?.ibsCbs?.cst ?? "",
+    cClassTrib: e.nfse?.servicoPadrao?.ibsCbs?.cClassTrib ?? "",
+    cIndOp: e.nfse?.servicoPadrao?.ibsCbs?.cIndOp ?? "",
   };
 }
 
@@ -192,6 +201,15 @@ function paraCadastro(f: Formulario) {
                 ? { codigoTributacaoNacional: so(f.codigoTributacaoNacional) }
                 : {}),
               ...(so(f.codigoNbs) ? { codigoNbs: so(f.codigoNbs) } : {}),
+              ...(so(f.cstIbsCbs) && so(f.cClassTrib)
+                ? {
+                    ibsCbs: {
+                      cst: so(f.cstIbsCbs),
+                      cClassTrib: so(f.cClassTrib),
+                      ...(so(f.cIndOp) ? { cIndOp: so(f.cIndOp) } : {}),
+                    },
+                  }
+                : {}),
             },
           },
         }
@@ -211,6 +229,13 @@ function problemas(f: Formulario, temCertificado: boolean, comArquivo: boolean, 
   if (!/^[A-Za-z]{2}$/.test(f.uf.trim())) p.push("UF deve ter 2 letras.");
   if (so(f.codigoMunicipio).length !== 7) p.push("Código IBGE do município deve ter 7 dígitos.");
   if (!f.nfce && !f.nfe && !f.nfse) p.push("Escolha pelo menos um tipo de nota.");
+  if (f.nfse && (so(f.cstIbsCbs) || so(f.cClassTrib))) {
+    if (so(f.cstIbsCbs).length !== 3) p.push("NFS-e: CST do IBS/CBS com 3 dígitos (ex.: 000).");
+    if (so(f.cClassTrib).length !== 6)
+      p.push("NFS-e: classificação tributária (cClassTrib) com 6 dígitos (ex.: 000001).");
+    if (so(f.cIndOp) && so(f.cIndOp).length !== 6)
+      p.push("NFS-e: código indicador da operação com 6 dígitos (ex.: 100301).");
+  }
   if (f.nfse && so(f.codigoTributacaoNacional).length !== 6)
     p.push("NFS-e: código de tributação nacional com 6 dígitos (ex.: 090201).");
   if (!temCertificado && !comArquivo) p.push("Anexe o certificado digital A1 (.pfx).");
@@ -407,6 +432,22 @@ export function ConfigurarEmissor({
                     placeholder: "ex.: 090201",
                   })}
                   {campo("codigoNbs", "Código NBS (opcional)", { inputMode: "numeric" })}
+                  <p className="fiscal-suave">
+                    Reforma tributária (IBS/CBS): obrigatório nas notas a partir de 10/2026 quando o
+                    governo virar o leiaute. Peça os códigos ao contador.
+                  </p>
+                  {campo("cstIbsCbs", "CST do IBS/CBS", {
+                    inputMode: "numeric",
+                    placeholder: "ex.: 000",
+                  })}
+                  {campo("cClassTrib", "Classificação tributária (cClassTrib)", {
+                    inputMode: "numeric",
+                    placeholder: "ex.: 000001",
+                  })}
+                  {campo("cIndOp", "Código indicador da operação", {
+                    inputMode: "numeric",
+                    placeholder: "ex.: 100301",
+                  })}
                 </>
               )}
             </div>
