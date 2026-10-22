@@ -88,6 +88,12 @@ importers:
         specifier: ^4.23.15
         version: 4.23.15
 
+  packages/agente:
+    dependencies:
+      '@fiscal/api':
+        specifier: workspace:^
+        version: link:../../apps/api
+
   packages/armazenamento:
     dependencies:
       '@fiscal/core':

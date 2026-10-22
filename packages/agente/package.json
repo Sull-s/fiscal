@@ -1,0 +1,29 @@
+{
+  "name": "@fiscal/agente",
+  "version": "0.1.0",
+  "description": "Emissor fiscal embutido no app (Electron/Node): NFC-e, NF-e e NFS-e sem servidor e sem instalar o agente separado",
+  "license": "UNLICENSED",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./electron": {
+      "types": "./dist/electron.d.ts",
+      "default": "./dist/electron.js"
+    }
+  },
+  "files": ["dist"],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@fiscal/api": "workspace:^"
+  }
+}

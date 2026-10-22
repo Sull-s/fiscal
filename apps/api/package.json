@@ -1,9 +1,20 @@
 {
   "name": "@fiscal/api",
   "version": "0.1.0",
-  "private": true,
-  "description": "Serviço fiscal central multi-empresa: NFC-e e NFS-e por HTTP",
+  "description": "Serviço fiscal (NFC-e, NF-e, NFS-e, DF-e) por HTTP ou embutido: o mesmo código do agente local, do servidor e do app com emissor embutido",
+  "license": "UNLICENSED",
   "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsup",
     "start": "node dist/principal.js",
