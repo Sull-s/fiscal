@@ -1,0 +1,44 @@
+{
+  "name": "exemplo-app-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Exemplo: caixa em Electron com o emissor fiscal embutido (sem servidor e sem instalar agente separado)",
+  "type": "module",
+  "main": "principal.mjs",
+  "scripts": {
+    "build": "tsup",
+    "iniciar": "tsup && electron .",
+    "typecheck": "tsc --noEmit",
+    "instalador": "tsup && electron-builder --win",
+    "instalador:pasta": "tsup && electron-builder --win --dir"
+  },
+  "dependencies": {
+    "@fiscal/agente": "workspace:^",
+    "@fiscal/ui": "workspace:^"
+  },
+  "devDependencies": {
+    "@types/react": "18.3.12",
+    "@types/react-dom": "18.3.1",
+    "electron": "45.0.0",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "electron-builder": "26.0.12"
+  },
+  "build": {
+    "appId": "br.com.exemplo.caixa",
+    "productName": "Caixa Exemplo",
+    "directories": {
+      "output": "saida"
+    },
+    "files": ["principal.mjs", "preload.cjs", "tela/index.html", "tela/dist/**", "package.json"],
+    "asarUnpack": ["**/node_modules/@electric-sql/pglite/**", "**/node_modules/pdfkit/**"],
+    "win": {
+      "target": "nsis",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}

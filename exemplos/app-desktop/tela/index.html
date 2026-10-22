@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<!-- A tela só carrega o próprio código; a única saída para a internet é a busca de CEP -->
+<meta http-equiv="Content-Security-Policy"
+  content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src https://viacep.com.br; frame-src blob:; object-src 'none'; base-uri 'none'">
+<title>Caixa (exemplo)</title>
+<link rel="stylesheet" href="dist/fiscal.css">
+<style>
+  body { margin: 0; font: 15px/1.45 system-ui, "Segoe UI", sans-serif; background: #f6f7f9; color: #1d2330; }
+  header { display: flex; gap: 8px; align-items: center; padding: 12px 20px; background: #fff; border-bottom: 1px solid #dfe3ea; }
+  header h1 { font-size: 17px; margin: 0 16px 0 0; }
+  header button { font: inherit; border: 1px solid #dfe3ea; background: #fff; border-radius: 8px; padding: 6px 14px; cursor: pointer; }
+  header button[aria-pressed="true"] { background: #2457d6; border-color: #2457d6; color: #fff; }
+  main { max-width: 980px; margin: 0 auto; padding: 20px 16px; }
+  .produtos { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+  .produtos button { font: inherit; padding: 10px 14px; border-radius: 10px; border: 1px solid #dfe3ea; background: #fff; cursor: pointer; }
+  .aviso { padding: 12px 14px; border-left: 4px solid #b26a00; background: #fff; border-radius: 6px; margin-bottom: 16px; }
+  @media (prefers-color-scheme: dark) {
+    body { background: #12151b; color: #e7eaf0; }
+    header, .produtos button, header button, .aviso { background: #1b2029; border-color: #2b3240; color: #e7eaf0; }
+  }
+</style>
+</head>
+<body>
+<div id="raiz"></div>
+<script src="dist/tela.global.js"></script>
+</body>
+</html>
