@@ -48,7 +48,8 @@ export interface OpcoesServicoFiscal {
 export async function iniciarServicoFiscal(opcoes: OpcoesServicoFiscal) {
   const registrar =
     opcoes.aoRegistrar ??
-    ((e: Record<string, unknown>) => console.log(JSON.stringify({ hora: new Date().toISOString(), ...e })));
+    ((e: Record<string, unknown>) =>
+      console.log(JSON.stringify({ hora: new Date().toISOString(), ...e })));
   const pasta = resolve(opcoes.pastaDados ?? "dados");
 
   let executar: (sql: string, p: unknown[]) => Promise<{ rows: Record<string, unknown>[] }>;
