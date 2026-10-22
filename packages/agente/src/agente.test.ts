@@ -34,12 +34,26 @@ const json = (corpo: unknown) => ({
 });
 
 describe("emissor embutido", () => {
-  it("chave mestra: gerada uma vez, guardada cifrada e lida de volta igual", () => {
+  it("chave mestra: gerada uma vez, guardada cifrada e lida de volta igual", async () => {
     const arquivo = join(pasta, "chave.bin");
-    const lida = chaveMestraProtegida({ arquivo, proteger, abrir });
+    const lida = await chaveMestraProtegida({ arquivo, proteger, abrir });
     expect(Buffer.from(lida, "base64")).toHaveLength(32);
     expect(readFileSync(arquivo, "utf8")).not.toContain(lida);
-    expect(chaveMestraProtegida({ arquivo, proteger, abrir })).toBe(lida);
+    expect(await chaveMestraProtegida({ arquivo, proteger, abrir })).toBe(lida);
+    // Formato do safeStorage assíncrono: { result, shouldReEncrypt } regrava cifrado de novo
+    const outra = join(pasta, "chave-2.bin");
+    const criada = await chaveMestraProtegida({ arquivo: outra, proteger, abrir });
+    let regravou = false;
+    const lidaDeNovo = await chaveMestraProtegida({
+      arquivo: outra,
+      proteger: (t) => {
+        regravou = true;
+        return proteger(t);
+      },
+      abrir: async (b) => ({ result: abrir(b), shouldReEncrypt: true }),
+    });
+    expect(lidaDeNovo).toBe(criada);
+    expect(regravou).toBe(true);
   });
 
   it("antes de configurar: avisa que falta configurar, sem token nenhum na mão do app", async () => {

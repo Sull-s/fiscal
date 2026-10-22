@@ -151,26 +151,38 @@ export async function iniciarAgente(opcoes: OpcoesAgente): Promise<Agente> {
 
 /**
  * Chave mestra guardada com a proteção do sistema operacional: gerada na primeira execução,
- * gravada CIFRADA por `proteger` e lida de volta por `abrir`. No Electron:
+ * gravada CIFRADA por `proteger` e lida de volta por `abrir`. No Electron (≥ 38, API assíncrona):
  *
  *   chaveMestraProtegida({
  *     arquivo: join(app.getPath("userData"), "fiscal", "chave.bin"),
- *     proteger: (t) => safeStorage.encryptString(t),
- *     abrir: (b) => safeStorage.decryptString(b),
+ *     proteger: (t) => safeStorage.encryptStringAsync(t),
+ *     abrir: (b) => safeStorage.decryptStringAsync(b),
  *   })
  *
  * No Windows o safeStorage usa o DPAPI: só este usuário, neste PC, abre a chave. Se o arquivo
  * se perder, os certificados cadastrados não abrem mais (basta enviar o A1 de novo pela tela).
+ * `abrir` pode devolver o texto ou { result, shouldReEncrypt } (safeStorage): quando o sistema
+ * pede, a chave é cifrada de novo e regravada.
  */
-export function chaveMestraProtegida(opcoes: {
+export async function chaveMestraProtegida(opcoes: {
   arquivo: string;
-  proteger: (texto: string) => Uint8Array;
-  abrir: (dados: Buffer) => string;
-}): string {
-  if (existsSync(opcoes.arquivo)) return opcoes.abrir(readFileSync(opcoes.arquivo));
+  proteger: (texto: string) => Uint8Array | Promise<Uint8Array>;
+  abrir: (
+    dados: Buffer,
+  ) =>
+    | string
+    | { result: string; shouldReEncrypt?: boolean }
+    | Promise<string | { result: string; shouldReEncrypt?: boolean }>;
+}): Promise<string> {
+  if (existsSync(opcoes.arquivo)) {
+    const aberto = await opcoes.abrir(readFileSync(opcoes.arquivo));
+    if (typeof aberto === "string") return aberto;
+    if (aberto.shouldReEncrypt) writeFileSync(opcoes.arquivo, await opcoes.proteger(aberto.result));
+    return aberto.result;
+  }
   const chave = gerarChaveMestra();
   mkdirSync(dirname(opcoes.arquivo), { recursive: true });
-  writeFileSync(opcoes.arquivo, opcoes.proteger(chave));
+  writeFileSync(opcoes.arquivo, await opcoes.proteger(chave));
   return chave;
 }
 

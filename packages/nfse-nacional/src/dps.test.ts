@@ -78,6 +78,25 @@ describe("montarDps", () => {
       expect((erro as ErroFiscal).detalhes?.problemas).toHaveLength(4);
     }
   });
+
+  it("endereço do tomador sem rua é barrado antes de ir ao gov.br (E1235)", () => {
+    const e = entradaReal();
+    if (!e.tomador.endereco) throw new Error("fixture sem endereço");
+    e.tomador.endereco.logradouro = "";
+    e.tomador.endereco.cep = "";
+    expect(() => montarDps(e)).toThrow();
+    try {
+      montarDps(e);
+    } catch (erro) {
+      expect((erro as ErroFiscal).detalhes?.problemas).toEqual([
+        "Endereço do tomador incompleto: falta rua, CEP. Complete ou não envie o endereço.",
+      ]);
+    }
+    // Sem endereço nenhum continua valendo
+    const semEndereco = entradaReal();
+    const { endereco: _, ...tomador } = semEndereco.tomador;
+    expect(montarDps({ ...semEndereco, tomador }).xml).not.toContain("<end>");
+  });
 });
 
 describe("montarCancelamentoNfse", () => {

@@ -164,6 +164,22 @@ function validar(entrada: {
     problemas.push("CNPJ/CPF do tomador inválido.");
   }
   if (tomador && !tomador.nome?.trim()) problemas.push("Nome do tomador não informado.");
+  // Endereço é opcional, mas se for, vai completo: sem a rua o gov.br recusa com E1235
+  // ("end ... expected 'xLgr'"), como aconteceu no portal da Agilize em 21/10/2026
+  const end = tomador?.endereco;
+  if (end) {
+    const faltando = [
+      !end.logradouro?.trim() && "rua",
+      !end.numero?.trim() && "número",
+      !end.bairro?.trim() && "bairro",
+      somenteDigitos(end.cep).length !== 8 && "CEP",
+      somenteDigitos(end.codigoMunicipio).length !== 7 && "município (código IBGE)",
+    ].filter(Boolean);
+    if (faltando.length)
+      problemas.push(
+        `Endereço do tomador incompleto: falta ${faltando.join(", ")}. Complete ou não envie o endereço.`,
+      );
+  }
   if (somenteDigitos(servico.codigoMunicipioPrestacao).length !== 7) {
     problemas.push("Município da prestação deve ter 7 dígitos (código IBGE).");
   }
