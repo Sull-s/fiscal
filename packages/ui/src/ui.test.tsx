@@ -1,12 +1,14 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { CancelarNota } from "./CancelarNota";
+import { ConfigurarEmissor } from "./ConfigurarEmissor";
 import { EmissorNfce } from "./EmissorNfce";
 import { ListaNotas } from "./ListaNotas";
 import { NotasRecebidas } from "./NotasRecebidas";
 import { RelatorioContador } from "./RelatorioContador";
 import { ErroApi, criarClienteFiscal } from "./cliente";
 import { ProvedorFiscal } from "./comum";
+import { fetchPeloIpc } from "./ipc";
 
 /** API simulada: registra as chamadas e responde conforme a rota. */
 function apiFalsa(rotas: Record<string, (corpo: unknown, cab: Headers) => [number, unknown]>) {
@@ -310,5 +312,119 @@ describe("NotasRecebidas e RelatorioContador", () => {
     });
     expect(chamadas[0]?.corpo).toEqual({ motivo: "Servico nao foi prestado" });
     expect(ok).toHaveBeenCalled();
+  });
+});
+
+describe("ConfigurarEmissor", () => {
+  it("explica o que falta, salva empresa e certificado (só no emissor) e testa a SEFAZ", async () => {
+    const { cliente, chamadas } = apiFalsa({
+      "GET /v1/admin/empresas/principal": () => [404, { erro: { codigo: "X", mensagem: "x" } }],
+      "PUT /v1/admin/empresas/principal/certificado": () => [
+        200,
+        {
+          titular: "LOJA TESTE",
+          documento: "48618635000183",
+          validoAte: "2027-08-26T00:00:00Z",
+          situacao: "valido",
+          diasRestantes: 300,
+        },
+      ],
+      "PUT /v1/admin/empresas/principal": (corpo) => [
+        201,
+        { id: "principal", certificado: null, ...(corpo as object) },
+      ],
+      "GET /v1/sefaz/status": () => [
+        200,
+        {
+          emOperacao: true,
+          cStat: "107",
+          xMotivo: "Servico em Operacao",
+          diferencaRelogioSegundos: 2,
+        },
+      ],
+    });
+    const salvo = vi.fn();
+    render(
+      <ProvedorFiscal cliente={cliente}>
+        <ConfigurarEmissor buscarCep={null} onSalvo={salvo} />
+      </ProvedorFiscal>,
+    );
+    await screen.findByText("Configurar nota fiscal");
+
+    fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
+    expect(screen.getByText("Anexe o certificado digital A1 (.pfx).")).toBeTruthy();
+    expect(chamadas.filter((c) => c.metodo === "PUT")).toHaveLength(0);
+
+    const preencher = (rotulo: string, valor: string) =>
+      fireEvent.change(screen.getByLabelText(rotulo), { target: { value: valor } });
+    preencher("CNPJ", "48.618.635/0001-83");
+    preencher("Razão social", "Loja Teste");
+    preencher("Inscrição estadual", "0960000000");
+    preencher("CEP", "91450-510");
+    preencher("Rua", "Av. Teste");
+    preencher("Número", "39");
+    preencher("Bairro", "Centro");
+    preencher("Cidade", "Porto Alegre");
+    preencher("UF", "rs");
+    preencher("Código IBGE da cidade", "4314902");
+    const pfx = new File([new Uint8Array([1, 2, 3, 250])], "cert.pfx");
+    fireEvent.change(screen.getByLabelText("Arquivo do certificado (.pfx)"), {
+      target: { files: [pfx] },
+    });
+    preencher("Senha do certificado", "segredo");
+    fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
+
+    await screen.findByText("Configuração salva.");
+    const [empresa, certificado] = chamadas.filter((c) => c.metodo === "PUT");
+    expect(empresa?.corpo).toMatchObject({
+      cnpj: "48618635000183",
+      ambiente: 2,
+      nfce: {
+        serie: "1",
+        contingenciaOffline: true,
+        emitente: {
+          cnpj: "48618635000183",
+          crt: 1,
+          endereco: { cep: "91450510", uf: "RS", codigoMunicipio: "4314902" },
+        },
+      },
+    });
+    expect(certificado?.corpo).toEqual({ pfxBase64: btoa("ú"), senha: "segredo" });
+    expect(salvo).toHaveBeenCalled();
+    expect(screen.getByText("LOJA TESTE")).toBeTruthy();
+    // A senha não fica na tela depois de enviada
+    expect((screen.getByLabelText("Senha do certificado") as HTMLInputElement).value).toBe("");
+
+    fireEvent.click(screen.getByRole("button", { name: "Testar com a SEFAZ" }));
+    await screen.findByText(/SEFAZ: no ar/);
+  });
+});
+
+describe("fetchPeloIpc", () => {
+  it("converte fetch em pedido IPC e a resposta de volta (inclusive binário e 204)", async () => {
+    const pedidos: unknown[] = [];
+    const f = fetchPeloIpc(async (p) => {
+      pedidos.push(p);
+      if (p.url.endsWith("/vazio")) return { status: 204, cabecalhos: [], corpo: new Uint8Array() };
+      return {
+        status: 200,
+        cabecalhos: [["content-type", "application/pdf"]],
+        corpo: new Uint8Array([37, 80, 68, 70]),
+      };
+    });
+    const r = await f("fiscal://local/v1/nfe/1/danfe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ a: 1 }),
+    });
+    expect(r.headers.get("content-type")).toBe("application/pdf");
+    expect(new Uint8Array(await r.arrayBuffer())).toEqual(new Uint8Array([37, 80, 68, 70]));
+    expect(pedidos[0]).toEqual({
+      url: "fiscal://local/v1/nfe/1/danfe",
+      metodo: "POST",
+      cabecalhos: [["content-type", "application/json"]],
+      corpo: '{"a":1}',
+    });
+    expect((await f("fiscal://local/vazio")).status).toBe(204);
   });
 });

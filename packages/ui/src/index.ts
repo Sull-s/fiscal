@@ -7,8 +7,18 @@ export {
   type RelatorioMes,
   type ResultadoEmissaoNfce,
   type TipoManifestacao,
+  type CertificadoInfo,
+  type EmpresaConfigurada,
+  type EmitenteConfig,
+  type StatusSefaz,
   criarClienteFiscal,
 } from "./cliente";
+export {
+  type ConfigurarEmissorProps,
+  type EnderecoCep,
+  ConfigurarEmissor,
+} from "./ConfigurarEmissor";
+export { type PedidoIpc, type RespostaIpc, fetchPeloIpc } from "./ipc";
 export { ProvedorFiscal, Situacao, baixar, dataCurta, moeda, useFiscal } from "./comum";
 export { type ListaNotasProps, ListaNotas } from "./ListaNotas";
 export { type CancelarNotaProps, CancelarNota } from "./CancelarNota";

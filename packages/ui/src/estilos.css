@@ -225,3 +225,27 @@
 .fiscal-dialogo::backdrop {
   background: rgb(0 0 0 / 0.4);
 }
+
+/* ConfigurarEmissor: seções do formulário */
+.fiscal-grupo {
+  border: 1px solid var(--fiscal-borda);
+  border-radius: var(--fiscal-raio);
+  padding: 4px 14px 12px;
+  margin: 0 0 14px;
+  min-width: 0;
+}
+.fiscal-grupo legend {
+  font-weight: 600;
+  padding: 0 6px;
+}
+.fiscal-grupo label:has(input[type="checkbox"]),
+.fiscal-grupo label:has(input[type="radio"]) {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  color: var(--fiscal-texto);
+}
+.fiscal-grupo input[type="checkbox"],
+.fiscal-grupo input[type="radio"] {
+  width: auto;
+}

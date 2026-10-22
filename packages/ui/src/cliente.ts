@@ -170,6 +170,91 @@ export function criarClienteFiscal(opcoes: OpcoesCliente) {
         `/v1/dfe/notas/${chave}/manifestacao`,
         { tipo, ...(justificativa ? { justificativa } : {}) },
       ),
+    /** SEFAZ do estado em operação? E a diferença do relógio deste computador */
+    statusSefaz: () => json<StatusSefaz>("GET", "/v1/sefaz/status"),
+    /**
+     * Cadastro da empresa e certificado (rotas /v1/admin). No emissor embutido (@fiscal/agente)
+     * funcionam direto: ele autentica sozinho. Num servidor exigem o token do administrador.
+     */
+    configuracao: (empresaId = "principal") => {
+      const caminho = `/v1/admin/empresas/${empresaId}`;
+      return {
+        /** null quando a empresa ainda não foi cadastrada */
+        obter: async (): Promise<EmpresaConfigurada | null> => {
+          const r = await buscar(`${base}${caminho}`, {
+            headers: opcoes.chave ? { Authorization: `Bearer ${opcoes.chave}` } : {},
+          });
+          if (r.status === 404) return null;
+          if (!r.ok) await falhar(r);
+          return (await r.json()) as EmpresaConfigurada;
+        },
+        salvar: (dados: Record<string, unknown>) => json<EmpresaConfigurada>("PUT", caminho, dados),
+        /** O .pfx em base64 e a senha vão só para o emissor, que guarda tudo cifrado */
+        enviarCertificado: (pfxBase64: string, senha: string) =>
+          json<CertificadoInfo & { situacao: string; diasRestantes: number }>(
+            "PUT",
+            `${caminho}/certificado`,
+            { pfxBase64, senha },
+          ),
+      };
+    },
+  };
+}
+
+export interface StatusSefaz {
+  emOperacao: boolean;
+  cStat: string;
+  xMotivo: string;
+  diferencaRelogioSegundos?: number;
+}
+
+export interface CertificadoInfo {
+  titular: string;
+  documento: string;
+  validoAte: string;
+}
+
+/** Cadastro como o emissor devolve (sem segredos) */
+export interface EmpresaConfigurada {
+  id: string;
+  nome: string;
+  cnpj: string;
+  ambiente: 1 | 2;
+  nfce?: { emitente: EmitenteConfig; serie: string; contingenciaOffline?: boolean };
+  nfe?: { emitente: EmitenteConfig; serie: string; contingenciaSvc?: boolean };
+  nfse?: {
+    prestador: {
+      documento: string;
+      telefone?: string;
+      email?: string;
+      regime: { opcaoSimples: number };
+    };
+    serie: string;
+    servicoPadrao?: {
+      codigoMunicipioPrestacao?: string;
+      codigoTributacaoNacional?: string;
+      codigoNbs?: string;
+    };
+  };
+  certificado: CertificadoInfo | null;
+}
+
+export interface EmitenteConfig {
+  cnpj: string;
+  inscricaoEstadual: string;
+  razaoSocial: string;
+  nomeFantasia?: string;
+  crt: 1 | 2 | 3 | 4;
+  endereco: {
+    logradouro: string;
+    numero?: string;
+    complemento?: string;
+    bairro: string;
+    codigoMunicipio: string;
+    municipio: string;
+    uf: string;
+    cep?: string;
+    telefone?: string;
   };
 }
 
