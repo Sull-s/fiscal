@@ -293,6 +293,13 @@ ol.passos{margin:8px 0 0;padding-left:22px}ol.passos li{margin:3px 0}
     var pedido = { servico: servico, valores: { valorServico: numero($("s_valor").value), tributacaoIssqn: 1, retencaoIss: 1 }, referencia: "tela-de-testes" };
     var doc = digitos($("s_doc").value);
     if(doc) pedido.tomador = { documento: doc, nome: $("s_nome").value.trim() || "Tomador" };
+    // No TESTE, sem tomador: um fictício com o endereço da própria empresa (com IBS/CBS o imposto
+    // incide no endereço do tomador, e o governo exige o tomador identificado e com endereço)
+    var em = (e.nfce && e.nfce.emitente) || (e.nfe && e.nfe.emitente);
+    if(!doc && ambiente()===2 && em && em.endereco.cep){
+      pedido.tomador = { documento: "12345678909", nome: "Tomador de teste",
+        endereco: { codigoMunicipio: em.endereco.codigoMunicipio, cep: em.endereco.cep, logradouro: em.endereco.logradouro, numero: em.endereco.numero || "S/N", bairro: em.endereco.bairro } };
+    }
     return pedido;
   }
   var PEDIDO = { nfce: pedidoNfce, nfe: pedidoNfe, nfse: pedidoNfse };

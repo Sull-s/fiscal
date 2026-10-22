@@ -201,6 +201,17 @@ function validar(
       problemas.push("IBS/CBS: cClassTrib deve ter 6 dígitos (ex.: 000001).");
     if (ibs.cIndOp !== undefined && !/^\d{6}$/.test(ibs.cIndOp))
       problemas.push("IBS/CBS: código indicador da operação (cIndOp) deve ter 6 dígitos.");
+    // O IBS/CBS incide no endereço do tomador (ou do destinatário = tomador): ele precisa vir
+    // identificado e com endereço (regra E0239 do Sistema Nacional)
+    if (
+      ibs.cIndOp &&
+      INCIDE_NO_TOMADOR.has(ibs.cIndOp) &&
+      (!limparCnpj(tomador?.documento ?? "") || !tomador?.endereco)
+    ) {
+      problemas.push(
+        `Com o código de operação ${ibs.cIndOp} o IBS/CBS incide no endereço do tomador: informe o CPF/CNPJ e o endereço dele.`,
+      );
+    }
   }
   const docPrest = limparCnpj(prestador.documento ?? "");
   if (!(docPrest.length === 14 ? validarCnpj(docPrest) : validarCpf(docPrest))) {
@@ -246,6 +257,28 @@ function validar(
     throw new ErroFiscal("DPS_INVALIDA", problemas.join(" "), { problemas });
   }
 }
+
+/**
+ * Códigos indicadores da operação (Anexo C/VII da NFS-e) cujo local de incidência é o endereço
+ * do tomador/adquirente ou do destinatário (que aqui é o próprio tomador: indDest = 0)
+ */
+const INCIDE_NO_TOMADOR = new Set([
+  "010103",
+  "010106",
+  "030102",
+  "030103",
+  "050102",
+  "050103",
+  "100101",
+  "100102",
+  "100201",
+  "100301",
+  "100302",
+  "100401",
+  "100501",
+  "100502",
+  "100601",
+]);
 
 /** Leiaute de cada ambiente enquanto a produção não virar (veja LeiauteDps) */
 export const LEIAUTE_PADRAO: Readonly<Record<1 | 2, LeiauteDps>> = { 1: "2026-02", 2: "2026-10" };

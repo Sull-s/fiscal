@@ -17,8 +17,8 @@ const TESTES = join(import.meta.dirname, "..", "testes");
 const PFX = readFileSync(join(TESTES, "certificado-teste.pfx")).toString("base64");
 const NFSE_REAL = readFileSync(join(TESTES, "nfse-autorizada.xml"), "utf8");
 const CHAVE_NFSE = "43149022210440532000101000000000000126089303229430";
-/** Códigos genéricos de IBS/CBS (tributação integral, serviço em geral) só para os testes */
-const IBS_CBS_TESTE = { cst: "000", cClassTrib: "000001", cIndOp: "100301" };
+/** Códigos genéricos de IBS/CBS (tributação integral; incidência no estabelecimento do prestador) só para os testes */
+const IBS_CBS_TESTE = { cst: "000", cClassTrib: "000001", cIndOp: "030101" };
 /** NFS-e da empresa de teste (CNPJ 48618635000183) emitida por outro sistema */
 const CHAVE_OUTRO_SISTEMA = `4314902${"22"}48618635000183${"0000000000777"}2610${"123456789"}0`;
 const ADMIN = "token-admin-de-teste-bem-comprido";

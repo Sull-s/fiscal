@@ -72,6 +72,22 @@ describe("montarDps", () => {
       dps: { ...outubro, leiaute: "2026-02" },
     });
     expect(producao.xml).not.toContain("<IBSCBS>");
+    // Incidência no endereço do tomador (100301): sem tomador, barrado (lá seria E0239)
+    const { tomador: _t, ...semTomador } = e;
+    expect(() =>
+      montarDps({
+        ...semTomador,
+        servico: { ...e.servico, ibsCbs: { ...ibsCbs, cIndOp: "100301" } },
+        dps: outubro,
+      }),
+    ).toThrow(/incide no endereço do tomador/);
+    expect(() =>
+      montarDps({
+        ...e,
+        servico: { ...e.servico, ibsCbs: { ...ibsCbs, cIndOp: "100301" } },
+        dps: outubro,
+      }),
+    ).not.toThrow();
     // Códigos no formato errado
     expect(() =>
       montarDps({
