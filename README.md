@@ -21,6 +21,14 @@ pnpm format        # formata e organiza imports
 pnpm changeset     # registra uma mudança para a próxima versão
 ```
 
+### Como lançar uma versão
+
+Todos os pacotes `@fiscal/*` andam juntos na mesma versão, e os pacotes publicados (`@sull-s/fiscal-agente` e `@sull-s/fiscal-ui`) seguem essa versão.
+
+1. A cada mudança que afeta quem usa o módulo: `pnpm changeset` (patch para correção, minor para recurso novo, major para quebra de compatibilidade).
+2. Na hora de lançar: `pnpm versionar` (atualiza as versões e o `CHANGELOG.md` de cada pacote) e `pnpm verificar`.
+3. Commit, tag `vX.Y.Z` e push da tag; o workflow `publicar` publica os dois pacotes.
+
 ## Pacotes
 
 | Pacote | Status | O que faz |
